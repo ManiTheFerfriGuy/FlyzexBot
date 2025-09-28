@@ -22,16 +22,42 @@ class Application:
     def format_for_admin(self) -> str:
         """Render the application so that admins can review it."""
 
+        submitted_at = self._format_submitted_at()
         header = [
             f"New application from {self.full_name}",
             f"User ID: {self.user_id}",
         ]
         if self.username:
             header.append(f"Username: @{self.username}")
+        header.append(f"Submitted at: {submitted_at}")
         header.append("")
 
         qa_lines = [f"Q: {item['question']}\nA: {item['answer']}" for item in self.answers]
         return "\n".join(header + qa_lines)
+
+    def _format_submitted_at(self) -> str:
+        """Return a human-friendly and safe representation of submitted time."""
+
+        raw = (self.submitted_at or "").replace("\r", " ").replace("\n", " ").strip()
+        if not raw:
+            return "Unknown"
+
+        candidates = [raw]
+        first_token = raw.split()[0]
+        if first_token and first_token not in candidates:
+            candidates.append(first_token)
+
+        for candidate in candidates:
+            try:
+                dt = datetime.fromisoformat(candidate)
+            except ValueError:
+                continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_utc = dt.astimezone(timezone.utc)
+            return dt_utc.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+        return raw
 
 
 class ApplicationStore:
