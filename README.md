@@ -52,6 +52,12 @@ python -m bot.main
 The bot uses long polling by default. Deploy it on a server or service that can
 run a persistent Python process.
 
+## Admin commands
+
+- `/pending` – Lists all applications awaiting review.
+- `/history <user_id>` – Shows the stored application for the specified user ID,
+  allowing admins to review previous submissions.
+
 ## Next steps
 
 This initial version keeps configuration in code and uses JSON storage. Future
