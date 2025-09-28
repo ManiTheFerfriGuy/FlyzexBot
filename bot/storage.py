@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from html import escape
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, MutableMapping, Optional
@@ -22,15 +23,19 @@ class Application:
     def format_for_admin(self) -> str:
         """Render the application so that admins can review it."""
 
+        full_name = escape(self.full_name)
         header = [
-            f"New application from {self.full_name}",
+            f"New application from {full_name}",
             f"User ID: {self.user_id}",
         ]
         if self.username:
-            header.append(f"Username: @{self.username}")
+            header.append(f"Username: @{escape(self.username)}")
         header.append("")
 
-        qa_lines = [f"Q: {item['question']}\nA: {item['answer']}" for item in self.answers]
+        qa_lines = [
+            f"Q: {escape(item['question'])}\nA: {escape(item['answer'])}"
+            for item in self.answers
+        ]
         return "\n".join(header + qa_lines)
 
 
