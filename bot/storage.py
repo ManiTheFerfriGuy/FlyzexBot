@@ -24,17 +24,25 @@ class Application:
         """Render the application so that admins can review it."""
 
         full_name = escape(self.full_name)
+        username = escape(self.username) if self.username else None
+        escaped_answers = [
+            {
+                "question": escape(item["question"]),
+                "answer": escape(item["answer"]),
+            }
+            for item in self.answers
+        ]
+
         header = [
             f"New application from {full_name}",
             f"User ID: {self.user_id}",
         ]
-        if self.username:
-            header.append(f"Username: @{escape(self.username)}")
+        if username:
+            header.append(f"Username: @{username}")
         header.append("")
 
         qa_lines = [
-            f"Q: {escape(item['question'])}\nA: {escape(item['answer'])}"
-            for item in self.answers
+            f"Q: {item['question']}\nA: {item['answer']}" for item in escaped_answers
         ]
         return "\n".join(header + qa_lines)
 
