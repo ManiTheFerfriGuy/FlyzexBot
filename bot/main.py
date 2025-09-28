@@ -136,8 +136,10 @@ async def accept_application(callback: CallbackQuery, config: BotConfig, store: 
     await callback.message.answer("Application approved. Invitation sent to the applicant.")
     await bot.send_message(
         user_id,
-        "🎉 Congratulations! Your application has been approved. Here is your invite code:\n"
-        f"<code>{config.invite_code}</code>",
+        text=(
+            "🎉 Congratulations! Your application has been approved. Here is your invite code:\n"
+            f"<code>{config.invite_code}</code>"
+        ),
         parse_mode=ParseMode.HTML,
     )
     await callback.answer("Applicant accepted.")
