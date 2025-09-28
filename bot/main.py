@@ -187,6 +187,32 @@ async def list_pending(message: Message, config: BotConfig, store: ApplicationSt
     await message.answer("\n".join(lines))
 
 
+@router.message(Command("history"))
+async def show_history(message: Message, config: BotConfig, store: ApplicationStore) -> None:
+    if message.from_user.id not in config.admin_ids:
+        await message.answer("You are not authorised to use this command.")
+        return
+
+    text = message.text or ""
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Usage: /history <user_id>")
+        return
+
+    try:
+        target_id = int(parts[1])
+    except ValueError:
+        await message.answer("Usage: /history <user_id>")
+        return
+
+    application = store.get_history(target_id)
+    if application is None:
+        await message.answer("No application history found for that user.")
+        return
+
+    await message.answer(application.format_for_admin())
+
+
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     config = load_config()
