@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 from typing import Dict, Iterable, List, MutableMapping, Optional
@@ -59,7 +59,7 @@ class ApplicationStore:
     # ------------------------------------------------------------------
     def add_pending(self, application: Application) -> None:
         data = self._read()
-        data.setdefault("pending", {})[str(application.user_id)] = application.__dict__
+        data.setdefault("pending", {})[str(application.user_id)] = asdict(application)
         self._write(data)
 
     def pop_pending(self, user_id: int) -> Optional[Application]:
