@@ -1,6 +1,7 @@
 """Group handlers for FlyzexBot."""
 from __future__ import annotations
 
+from html import escape
 import logging
 from typing import List, Sequence, Tuple
 
@@ -65,7 +66,8 @@ class GroupHandlers:
 
         lines: List[str] = [PERSIAN_TEXTS.group_xp_leaderboard_title]
         for index, (display_name, xp) in enumerate(resolved, start=1):
-            lines.append(f"{index}. <b>{display_name}</b> — <code>{xp}</code>")
+            safe_name = escape(str(display_name))
+            lines.append(f"{index}. <b>{safe_name}</b> — <code>{xp}</code>")
         await chat.send_message("\n".join(lines), parse_mode=ParseMode.HTML)
 
     async def add_cup(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,9 +104,12 @@ class GroupHandlers:
 
         lines: List[str] = [PERSIAN_TEXTS.group_cup_leaderboard_title]
         for cup in cups:
-            podium = "، ".join(cup.get("podium", [])) or "—"
+            title = escape(str(cup.get("title", "")))
+            description = escape(str(cup.get("description", "")))
+            podium_entries = [escape(str(slot)) for slot in cup.get("podium", []) if slot]
+            podium = "، ".join(podium_entries) if podium_entries else "—"
             lines.append(
-                f"<b>{cup['title']}</b> — {cup['description']}\n🥇 {podium}"
+                f"<b>{title}</b> — {description}\n🥇 {podium}"
             )
         await chat.send_message("\n\n".join(lines), parse_mode=ParseMode.HTML)
 

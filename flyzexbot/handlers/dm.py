@@ -1,6 +1,7 @@
 """Direct message handlers for FlyzexBot."""
 from __future__ import annotations
 
+from html import escape
 import logging
 from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -229,10 +230,14 @@ class DMHandlers:
         application = self.storage.get_application(user_id)
         if not application:
             return PERSIAN_TEXTS.dm_no_pending
+        full_name = escape(str(application.full_name))
+        raw_answer = application.answer if application.answer else "—"
+        answer = escape(str(raw_answer))
+        created_at = escape(str(application.created_at))
         return PERSIAN_TEXTS.dm_application_item.format(
-            full_name=application.full_name,
+            full_name=full_name,
             user_id=application.user_id,
-            answer=application.answer or "—",
-            created_at=application.created_at,
+            answer=answer,
+            created_at=created_at,
         )
 
