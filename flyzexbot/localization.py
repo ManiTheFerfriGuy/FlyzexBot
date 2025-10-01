@@ -1,4 +1,4 @@
-"""Localised Persian texts for FlyzexBot."""
+"""Localised texts for FlyzexBot."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -40,6 +40,9 @@ class TextPack:
     dm_already_admin: str
     dm_not_admin: str
     dm_no_admins: str
+    dm_cancelled: str
+    dm_admin_enter_user_id: str
+    dm_admin_invalid_user_id: str
     group_xp_updated: str
     group_xp_leaderboard_title: str
     group_cup_added: str
@@ -109,6 +112,9 @@ PERSIAN_TEXTS = TextPack(
     dm_already_admin="ℹ️ کاربر {user_id} از قبل ادمین است.",
     dm_not_admin="ℹ️ کاربر {user_id} در میان ادمین‌ها نیست.",
     dm_no_admins="هیچ ادمینی ثبت نشده است.",
+    dm_cancelled="فرآیند درخواست لغو شد.",
+    dm_admin_enter_user_id="لطفاً شناسه کاربر را وارد کنید.",
+    dm_admin_invalid_user_id="شناسه باید عددی باشد.",
     group_xp_updated="✨ {full_name} {xp} امتیاز تجربه دارد!",
     group_xp_leaderboard_title="🏆 جدول تجربه اعضای فعال",
     group_cup_added="🏆 جام جدید با عنوان «{title}» ثبت شد.",
@@ -120,4 +126,104 @@ PERSIAN_TEXTS = TextPack(
     ),
     admin_list_header="👮‍♂️ ادمین‌های فعال:\n{admins}",
 )
+
+
+ENGLISH_TEXTS = TextPack(
+    dm_welcome=(
+        "<b>🪟 Welcome to the Flyzex glass panel!</b>\n\n"
+        "Tap the button below to apply for the guild."
+    ),
+    dm_apply_button="Apply to the guild",
+    dm_status_button="Check status",
+    dm_withdraw_button="Withdraw request",
+    dm_application_started=(
+        "📝 Please tell us why you would like to join the guild.\n"
+        "Send /cancel to stop."
+    ),
+    dm_application_question="Please send your response:",
+    dm_application_received=(
+        "✅ Your application has been submitted! We will notify you after review."
+    ),
+    dm_application_duplicate=(
+        "ℹ️ Your application is already on file and is being reviewed."
+    ),
+    dm_admin_only="⛔️ This section is for admins only.",
+    dm_no_pending="There are no applications to review.",
+    dm_application_item=(
+        "<b>User:</b> {full_name} ({user_id})\n"
+        "<b>Answer:</b> {answer}\n"
+        "<b>Submitted:</b> {created_at}"
+    ),
+    dm_application_action_buttons={
+        "approve": "✅ Approve",
+        "deny": "❌ Reject",
+        "skip": "⏭ Skip",
+    },
+    dm_application_approved_user="🎉 Your application has been approved! Welcome aboard.",
+    dm_application_denied_user="❗️ Unfortunately your application was not approved.",
+    dm_application_approved_admin="✅ The application was approved.",
+    dm_application_denied_admin="❌ The application was rejected.",
+    dm_status_none="ℹ️ You have not submitted an application yet.",
+    dm_status_pending="In review",
+    dm_status_approved="Approved",
+    dm_status_denied="Rejected",
+    dm_status_withdrawn="Withdrawn by you",
+    dm_status_unknown="Unknown ({status})",
+    dm_status_template=(
+        "<b>Your application status:</b> {status}\n"
+        "<i>{last_updated_label}: {updated_at}</i>"
+    ),
+    dm_status_template_with_note=(
+        "<b>Your application status:</b> {status}\n"
+        "<i>{last_updated_label}: {updated_at}</i>\n"
+        "📝 {note}"
+    ),
+    dm_status_last_updated_label="Last update",
+    dm_withdraw_success="♻️ Your application has been withdrawn.",
+    dm_withdraw_not_found="No pending application was found to withdraw.",
+    dm_admin_added="✅ User {user_id} is now an admin.",
+    dm_admin_removed="♻️ User {user_id} has been removed from the admins.",
+    dm_not_owner="⛔️ Only the bot owner can run this command.",
+    dm_already_admin="ℹ️ User {user_id} is already an admin.",
+    dm_not_admin="ℹ️ User {user_id} is not an admin.",
+    dm_no_admins="No admins have been registered yet.",
+    dm_cancelled="The application process was cancelled.",
+    dm_admin_enter_user_id="Please provide a user ID.",
+    dm_admin_invalid_user_id="The user ID must be numeric.",
+    group_xp_updated="✨ {full_name} now has {xp} XP!",
+    group_xp_leaderboard_title="🏆 Active members leaderboard",
+    group_cup_added="🏆 A new cup titled \"{title}\" has been added.",
+    group_cup_leaderboard_title="🥇 Guild cups leaderboard",
+    group_no_data="No data has been recorded yet.",
+    error_generic="⚠️ Something went wrong. Please try again.",
+    glass_panel_caption=(
+        "<i>Glassmorphic styling with soft blur for a modern experience.</i>"
+    ),
+    admin_list_header="👮‍♂️ Active admins:\n{admins}",
+)
+
+
+DEFAULT_LANGUAGE_CODE = "fa"
+
+_TEXT_PACKS: Dict[str, TextPack] = {
+    "fa": PERSIAN_TEXTS,
+    "en": ENGLISH_TEXTS,
+}
+
+
+def normalize_language_code(language_code: str | None) -> str | None:
+    """Return a normalised ISO language code suitable for lookups."""
+
+    if not language_code:
+        return None
+    return language_code.split("-")[0].lower()
+
+
+def get_text_pack(language_code: str | None) -> TextPack:
+    """Retrieve a :class:`TextPack` for the requested language."""
+
+    normalised = normalize_language_code(language_code)
+    if normalised and normalised in _TEXT_PACKS:
+        return _TEXT_PACKS[normalised]
+    return _TEXT_PACKS[DEFAULT_LANGUAGE_CODE]
 

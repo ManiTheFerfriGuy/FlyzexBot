@@ -19,6 +19,7 @@ class Application:
     full_name: str
     answer: str
     created_at: str
+    language_code: Optional[str] = None
 
 
 @dataclass
@@ -123,7 +124,13 @@ class Storage:
         return list(self._state.admins)
 
     # Applications
-    async def add_application(self, user_id: int, full_name: str, answer: str) -> bool:
+    async def add_application(
+        self,
+        user_id: int,
+        full_name: str,
+        answer: str,
+        language_code: Optional[str] = None,
+    ) -> bool:
         async with self._lock:
             if user_id in self._state.applications:
                 return False
@@ -133,6 +140,7 @@ class Storage:
                 full_name=full_name,
                 answer=answer,
                 created_at=timestamp,
+                language_code=language_code,
             )
             self._state.application_history[user_id] = ApplicationHistoryEntry(
                 status="pending",

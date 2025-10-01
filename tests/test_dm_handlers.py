@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from flyzexbot.handlers.dm import DMHandlers
-from flyzexbot.localization import PERSIAN_TEXTS
+from flyzexbot.localization import ENGLISH_TEXTS, PERSIAN_TEXTS
 from flyzexbot.services.storage import ApplicationHistoryEntry
 
 
@@ -18,8 +18,9 @@ class DummyChat:
 
 
 class DummyUser:
-    def __init__(self, user_id: int) -> None:
+    def __init__(self, user_id: int, language_code: str = "fa") -> None:
         self.id = user_id
+        self.language_code = language_code
 
 
 class DummyContext:
@@ -38,7 +39,7 @@ def test_promote_admin_invalid_identifier() -> None:
     asyncio.run(handler.promote_admin(update, context))
 
     storage.add_admin.assert_not_awaited()
-    assert chat.messages and chat.messages[-1]["text"] == "شناسه باید عددی باشد."
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_invalid_user_id
 
 
 def test_demote_admin_invalid_identifier() -> None:
@@ -51,7 +52,20 @@ def test_demote_admin_invalid_identifier() -> None:
     asyncio.run(handler.demote_admin(update, context))
 
     storage.remove_admin.assert_not_awaited()
-    assert chat.messages and chat.messages[-1]["text"] == "شناسه باید عددی باشد."
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_invalid_user_id
+
+
+def test_promote_admin_invalid_identifier_english() -> None:
+    storage = SimpleNamespace(add_admin=AsyncMock())
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(1, language_code="en"), effective_chat=chat)
+    context = DummyContext(["oops"])
+
+    asyncio.run(handler.promote_admin(update, context))
+
+    storage.add_admin.assert_not_awaited()
+    assert chat.messages and chat.messages[-1]["text"] == ENGLISH_TEXTS.dm_admin_invalid_user_id
 
 
 def test_withdraw_success() -> None:
@@ -105,3 +119,19 @@ def test_status_with_pending_history() -> None:
     assert chat.messages
     last_message = chat.messages[-1]["text"]
     assert PERSIAN_TEXTS.dm_status_pending in last_message
+
+
+def test_status_with_approved_history_english() -> None:
+    history_entry = ApplicationHistoryEntry(status="approved", updated_at="2024-01-01T00:00:00", note=None)
+    storage = SimpleNamespace(get_application_status=lambda _: history_entry)
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(9, language_code="en"), effective_chat=chat)
+    context = DummyContext([])
+
+    asyncio.run(handler.status(update, context))
+
+    assert chat.messages
+    message = chat.messages[-1]["text"]
+    assert ENGLISH_TEXTS.dm_status_approved in message
+    assert context.user_data.get("preferred_language") == "en"

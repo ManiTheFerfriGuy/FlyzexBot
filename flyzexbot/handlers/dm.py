@@ -8,7 +8,8 @@ from telegram.constants import ParseMode
 from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
-from ..localization import PERSIAN_TEXTS
+from ..localization import (PERSIAN_TEXTS, TextPack, get_text_pack,
+                            normalize_language_code)
 from ..services.storage import ApplicationHistoryEntry, Storage
 from ..ui.keyboards import (application_review_keyboard,
                             glass_dm_welcome_keyboard)
@@ -42,9 +43,12 @@ class DMHandlers:
         if update.effective_chat is None:
             return
 
+        user = update.effective_user
+        language_code = getattr(user, "language_code", None) if user else None
+        texts = self._get_texts(context, language_code)
         await update.effective_chat.send_message(
-            text=f"{PERSIAN_TEXTS.dm_welcome}\n\n{PERSIAN_TEXTS.glass_panel_caption}",
-            reply_markup=glass_dm_welcome_keyboard(),
+            text=f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}",
+            reply_markup=glass_dm_welcome_keyboard(texts),
             parse_mode=ParseMode.HTML,
         )
 
@@ -58,21 +62,22 @@ class DMHandlers:
         if user is None:
             return
 
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         if self.storage.is_admin(user.id):
             await query.edit_message_text(
-                text=PERSIAN_TEXTS.dm_admin_only,
+                text=texts.dm_admin_only,
             )
             return
 
         if self.storage.has_application(user.id):
-            await query.edit_message_text(PERSIAN_TEXTS.dm_application_duplicate)
+            await query.edit_message_text(texts.dm_application_duplicate)
             return
 
         context.user_data["is_filling_application"] = True
         await query.edit_message_text(
-            text=PERSIAN_TEXTS.dm_application_started,
+            text=texts.dm_application_started,
         )
-        await query.message.chat.send_message(PERSIAN_TEXTS.dm_application_question)
+        await query.message.chat.send_message(texts.dm_application_question)
         return
 
     async def receive_application(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -83,19 +88,21 @@ class DMHandlers:
         if user is None or update.message is None:
             return
 
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         answer = update.message.text.strip()
         success = await self.storage.add_application(
             user_id=user.id,
             full_name=user.full_name or user.username or str(user.id),
             answer=answer,
+            language_code=context.user_data.get("preferred_language"),
         )
         if not success:
             LOGGER.warning("Duplicate application prevented for user %s", user.id)
-            await update.message.reply_text(PERSIAN_TEXTS.dm_application_duplicate)
+            await update.message.reply_text(texts.dm_application_duplicate)
             context.user_data.pop("is_filling_application", None)
             return
 
-        await update.message.reply_text(PERSIAN_TEXTS.dm_application_received)
+        await update.message.reply_text(texts.dm_application_received)
         review_chat_id = context.bot_data.get("review_chat_id")
         if review_chat_id:
             await context.bot.send_message(
@@ -109,28 +116,31 @@ class DMHandlers:
 
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop("is_filling_application", None)
+        language_code = getattr(update.effective_user, "language_code", None)
+        texts = self._get_texts(context, language_code)
         if update.message:
-            await update.message.reply_text("فرآیند درخواست لغو شد.")
+            await update.message.reply_text(texts.dm_cancelled)
 
     async def list_applications(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.effective_user
         chat = update.effective_chat
         if user is None or chat is None:
             return
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         if not self.storage.is_admin(user.id):
-            await chat.send_message(PERSIAN_TEXTS.dm_admin_only)
+            await chat.send_message(texts.dm_admin_only)
             return
 
         pending = self.storage.get_pending_applications()
         if not pending:
-            await chat.send_message(PERSIAN_TEXTS.dm_no_pending)
+            await chat.send_message(texts.dm_no_pending)
             return
 
         for application in pending[:5]:
             await chat.send_message(
-                text=self._render_application_text(application.user_id),
+                text=self._render_application_text(application.user_id, texts),
                 parse_mode=ParseMode.HTML,
-                reply_markup=application_review_keyboard(application.user_id),
+                reply_markup=application_review_keyboard(application.user_id, texts),
             )
 
     async def handle_application_action(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,8 +150,12 @@ class DMHandlers:
         await query.answer()
 
         user = query.from_user
-        if user is None or not self.storage.is_admin(user.id):
-            await query.edit_message_text(PERSIAN_TEXTS.dm_admin_only)
+        language_code = getattr(user, "language_code", None) if user else None
+        admin_texts = self._get_texts(context, language_code)
+        if user is None:
+            return
+        if not self.storage.is_admin(user.id):
+            await query.edit_message_text(admin_texts.dm_admin_only)
             return
 
         data = query.data
@@ -153,16 +167,17 @@ class DMHandlers:
         target_id = int(user_id_str)
         application = await self.storage.pop_application(target_id)
         if not application:
-            await query.edit_message_text(PERSIAN_TEXTS.dm_no_pending)
+            await query.edit_message_text(admin_texts.dm_no_pending)
             return
 
+        applicant_texts = get_text_pack(application.language_code)
         if action == "approve":
-            await query.edit_message_text(PERSIAN_TEXTS.dm_application_approved_admin)
-            await self._notify_user(context, target_id, PERSIAN_TEXTS.dm_application_approved_user)
+            await query.edit_message_text(admin_texts.dm_application_approved_admin)
+            await self._notify_user(context, target_id, applicant_texts.dm_application_approved_user)
             await self.storage.mark_application_status(target_id, "approved")
         else:
-            await query.edit_message_text(PERSIAN_TEXTS.dm_application_denied_admin)
-            await self._notify_user(context, target_id, PERSIAN_TEXTS.dm_application_denied_user)
+            await query.edit_message_text(admin_texts.dm_application_denied_admin)
+            await self._notify_user(context, target_id, applicant_texts.dm_application_denied_user)
             await self.storage.mark_application_status(target_id, "denied")
 
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
@@ -175,12 +190,14 @@ class DMHandlers:
         chat = update.effective_chat
         if chat is None:
             return
+        language_code = getattr(update.effective_user, "language_code", None)
+        texts = self._get_texts(context, language_code)
         admins = self.storage.list_admins()
         if not admins:
-            await chat.send_message(PERSIAN_TEXTS.dm_no_admins)
+            await chat.send_message(texts.dm_no_admins)
             return
         formatted = "\n".join(str(admin) for admin in admins)
-        await chat.send_message(PERSIAN_TEXTS.admin_list_header.format(admins=formatted))
+        await chat.send_message(texts.admin_list_header.format(admins=formatted))
 
     async def promote_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_owner(update):
@@ -188,19 +205,21 @@ class DMHandlers:
         chat = update.effective_chat
         if chat is None:
             return
+        language_code = getattr(update.effective_user, "language_code", None)
+        texts = self._get_texts(context, language_code)
         if not context.args:
-            await chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+            await chat.send_message(texts.dm_admin_enter_user_id)
             return
         try:
             user_id = int(context.args[0])
         except ValueError:
-            await chat.send_message("شناسه باید عددی باشد.")
+            await chat.send_message(texts.dm_admin_invalid_user_id)
             return
         added = await self.storage.add_admin(user_id)
         if added:
-            await chat.send_message(PERSIAN_TEXTS.dm_admin_added.format(user_id=user_id))
+            await chat.send_message(texts.dm_admin_added.format(user_id=user_id))
         else:
-            await chat.send_message(PERSIAN_TEXTS.dm_already_admin.format(user_id=user_id))
+            await chat.send_message(texts.dm_already_admin.format(user_id=user_id))
 
     async def demote_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_owner(update):
@@ -208,19 +227,21 @@ class DMHandlers:
         chat = update.effective_chat
         if chat is None:
             return
+        language_code = getattr(update.effective_user, "language_code", None)
+        texts = self._get_texts(context, language_code)
         if not context.args:
-            await chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+            await chat.send_message(texts.dm_admin_enter_user_id)
             return
         try:
             user_id = int(context.args[0])
         except ValueError:
-            await chat.send_message("شناسه باید عددی باشد.")
+            await chat.send_message(texts.dm_admin_invalid_user_id)
             return
         removed = await self.storage.remove_admin(user_id)
         if removed:
-            await chat.send_message(PERSIAN_TEXTS.dm_admin_removed.format(user_id=user_id))
+            await chat.send_message(texts.dm_admin_removed.format(user_id=user_id))
         else:
-            await chat.send_message(PERSIAN_TEXTS.dm_not_admin.format(user_id=user_id))
+            await chat.send_message(texts.dm_not_admin.format(user_id=user_id))
 
     async def _check_owner(self, update: Update) -> bool:
         user = update.effective_user
@@ -228,7 +249,8 @@ class DMHandlers:
         if user is None or chat is None:
             return False
         if user.id != self.owner_id:
-            await chat.send_message(PERSIAN_TEXTS.dm_not_owner)
+            texts = get_text_pack(getattr(user, "language_code", None))
+            await chat.send_message(texts.dm_not_owner)
             return False
         return True
 
@@ -237,7 +259,8 @@ class DMHandlers:
         chat = update.effective_chat
         if user is None or chat is None:
             return
-        text = self._render_status_text(self.storage.get_application_status(user.id))
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        text = self._render_status_text(self.storage.get_application_status(user.id), texts)
         await chat.send_message(text, parse_mode=ParseMode.HTML)
 
     async def show_status_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -251,7 +274,8 @@ class DMHandlers:
         message = query.message
         if message is None:
             return
-        text = self._render_status_text(self.storage.get_application_status(user.id))
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        text = self._render_status_text(self.storage.get_application_status(user.id), texts)
         await message.chat.send_message(text, parse_mode=ParseMode.HTML)
 
     async def withdraw(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -259,12 +283,13 @@ class DMHandlers:
         chat = update.effective_chat
         if user is None or chat is None:
             return
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         success = await self.storage.withdraw_application(user.id)
         context.user_data.pop("is_filling_application", None)
         if success:
-            await chat.send_message(PERSIAN_TEXTS.dm_withdraw_success)
+            await chat.send_message(texts.dm_withdraw_success)
         else:
-            await chat.send_message(PERSIAN_TEXTS.dm_withdraw_not_found)
+            await chat.send_message(texts.dm_withdraw_not_found)
 
     async def handle_withdraw_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -277,58 +302,84 @@ class DMHandlers:
         message = query.message
         if message is None:
             return
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         success = await self.storage.withdraw_application(user.id)
         context.user_data.pop("is_filling_application", None)
         if success:
-            await message.chat.send_message(PERSIAN_TEXTS.dm_withdraw_success)
+            await message.chat.send_message(texts.dm_withdraw_success)
         else:
-            await message.chat.send_message(PERSIAN_TEXTS.dm_withdraw_not_found)
+            await message.chat.send_message(texts.dm_withdraw_not_found)
 
-    def _render_application_text(self, user_id: int) -> str:
+    def _render_application_text(self, user_id: int, texts: TextPack | None = None) -> str:
         application = self.storage.get_application(user_id)
+        text_pack = texts or PERSIAN_TEXTS
         if not application:
-            return PERSIAN_TEXTS.dm_no_pending
+            return text_pack.dm_no_pending
         full_name = escape(str(application.full_name))
         raw_answer = application.answer if application.answer else "—"
         answer = escape(str(raw_answer))
         created_at = escape(str(application.created_at))
-        return PERSIAN_TEXTS.dm_application_item.format(
+        return text_pack.dm_application_item.format(
             full_name=full_name,
             user_id=application.user_id,
             answer=answer,
             created_at=created_at,
         )
 
-    def _render_status_text(self, status: ApplicationHistoryEntry | None) -> str:
+    def _render_status_text(self, status: ApplicationHistoryEntry | None, texts: TextPack | None = None) -> str:
+        text_pack = texts or PERSIAN_TEXTS
         if not status:
-            return PERSIAN_TEXTS.dm_status_none
+            return text_pack.dm_status_none
 
         status_map = {
-            "pending": PERSIAN_TEXTS.dm_status_pending,
-            "approved": PERSIAN_TEXTS.dm_status_approved,
-            "denied": PERSIAN_TEXTS.dm_status_denied,
-            "withdrawn": PERSIAN_TEXTS.dm_status_withdrawn,
+            "pending": text_pack.dm_status_pending,
+            "approved": text_pack.dm_status_approved,
+            "denied": text_pack.dm_status_denied,
+            "withdrawn": text_pack.dm_status_withdrawn,
         }
 
         status_label = status_map.get(status.status)
         if not status_label:
-            status_label = PERSIAN_TEXTS.dm_status_unknown.format(status=escape(status.status))
+            status_label = text_pack.dm_status_unknown.format(status=escape(status.status))
 
         updated_at = escape(status.updated_at)
-        last_updated_label = PERSIAN_TEXTS.dm_status_last_updated_label
+        last_updated_label = text_pack.dm_status_last_updated_label
 
         if status.note:
             note = escape(status.note)
-            return PERSIAN_TEXTS.dm_status_template_with_note.format(
+            return text_pack.dm_status_template_with_note.format(
                 status=status_label,
                 updated_at=updated_at,
                 note=note,
                 last_updated_label=last_updated_label,
             )
 
-        return PERSIAN_TEXTS.dm_status_template.format(
+        return text_pack.dm_status_template.format(
             status=status_label,
             updated_at=updated_at,
             last_updated_label=last_updated_label,
         )
+
+    def _get_texts(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        language_code: str | None = None,
+    ) -> TextPack:
+        """Resolve the most appropriate text pack for the current user."""
+
+        user_data = getattr(context, "user_data", None)
+        stored_language = None
+        if isinstance(user_data, dict):
+            stored_language = user_data.get("preferred_language")
+
+        normalised = normalize_language_code(language_code)
+        if normalised:
+            if isinstance(user_data, dict):
+                user_data["preferred_language"] = normalised
+            return get_text_pack(normalised)
+
+        if isinstance(stored_language, str):
+            return get_text_pack(stored_language)
+
+        return get_text_pack(None)
 
