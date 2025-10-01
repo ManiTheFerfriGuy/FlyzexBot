@@ -1,0 +1,7 @@
+python-telegram-bot[rate-limiter]==20.7
+pyyaml>=6.0
+cryptography>=41.0
+apscheduler>=3.10
+uvloop>=0.17; sys_platform != 'win32'
+aiofiles>=23.1
+pytest>=7.4
