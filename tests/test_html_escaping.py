@@ -8,6 +8,11 @@ import pytest
 telegram = pytest.importorskip("telegram")
 from telegram.constants import ParseMode  # noqa: E402  (import after skip)
 
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
 from flyzexbot.handlers.dm import DMHandlers
 from flyzexbot.handlers.group import GroupHandlers
 from flyzexbot.services.storage import Application
@@ -56,7 +61,7 @@ class GroupStorageStub:
         ]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_dm_application_rendering_escapes_html() -> None:
     application = Application(
         user_id=42,
@@ -81,7 +86,7 @@ async def test_dm_application_rendering_escapes_html() -> None:
     assert parse_mode == ParseMode.HTML
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_group_leaderboards_escape_user_generated_content(monkeypatch: pytest.MonkeyPatch) -> None:
     storage = GroupStorageStub()
     handlers = GroupHandlers(storage, xp_reward=5, xp_limit=5, cups_limit=5)

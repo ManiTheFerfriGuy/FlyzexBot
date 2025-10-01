@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,9 +22,17 @@ class Application:
 
 
 @dataclass
+class ApplicationHistoryEntry:
+    status: str
+    updated_at: str
+    note: Optional[str] = None
+
+
+@dataclass
 class StorageState:
     admins: List[int] = field(default_factory=list)
     applications: Dict[int, Application] = field(default_factory=dict)
+    application_history: Dict[int, ApplicationHistoryEntry] = field(default_factory=dict)
     xp: Dict[str, Dict[str, int]] = field(default_factory=dict)
     cups: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
 
@@ -33,6 +41,9 @@ class StorageState:
             "admins": self.admins,
             "applications": {
                 str(k): vars(v) for k, v in self.applications.items()
+            },
+            "application_history": {
+                str(k): vars(v) for k, v in self.application_history.items()
             },
             "xp": self.xp,
             "cups": self.cups,
@@ -43,9 +54,14 @@ class StorageState:
         applications = {
             int(k): Application(**v) for k, v in payload.get("applications", {}).items()
         }
+        application_history = {
+            int(k): ApplicationHistoryEntry(**v)
+            for k, v in payload.get("application_history", {}).items()
+        }
         return cls(
             admins=list(payload.get("admins", [])),
             applications=applications,
+            application_history=application_history,
             xp={k: {user: int(score) for user, score in v.items()} for k, v in payload.get("xp", {}).items()},
             cups={k: list(v) for k, v in payload.get("cups", {}).items()},
         )
@@ -111,11 +127,16 @@ class Storage:
         async with self._lock:
             if user_id in self._state.applications:
                 return False
+            timestamp = datetime.now(timezone.utc).isoformat()
             self._state.applications[user_id] = Application(
                 user_id=user_id,
                 full_name=full_name,
                 answer=answer,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=timestamp,
+            )
+            self._state.application_history[user_id] = ApplicationHistoryEntry(
+                status="pending",
+                updated_at=timestamp,
             )
             await self.save()
             return True
@@ -135,6 +156,32 @@ class Storage:
 
     def get_pending_applications(self) -> List[Application]:
         return list(self._state.applications.values())
+
+    async def withdraw_application(self, user_id: int) -> bool:
+        async with self._lock:
+            application = self._state.applications.pop(user_id, None)
+            if not application:
+                return False
+            timestamp = datetime.now(timezone.utc).isoformat()
+            self._state.application_history[user_id] = ApplicationHistoryEntry(
+                status="withdrawn",
+                updated_at=timestamp,
+            )
+            await self.save()
+            return True
+
+    async def mark_application_status(self, user_id: int, status: str, note: Optional[str] = None) -> None:
+        async with self._lock:
+            timestamp = datetime.now(timezone.utc).isoformat()
+            self._state.application_history[user_id] = ApplicationHistoryEntry(
+                status=status,
+                updated_at=timestamp,
+                note=note,
+            )
+            await self.save()
+
+    def get_application_status(self, user_id: int) -> Optional[ApplicationHistoryEntry]:
+        return self._state.application_history.get(user_id)
 
     # XP tracking
     async def add_xp(self, chat_id: int, user_id: int, amount: int) -> int:
@@ -162,7 +209,7 @@ class Storage:
                     "title": title,
                     "description": description,
                     "podium": podium,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             await self.save()
