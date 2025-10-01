@@ -1,0 +1,19 @@
+# نمونه فایل پیکربندی برای FlyzexBot
+telegram:
+  bot_token_env: BOT_TOKEN  # نام متغیر محیطی که توکن در آن قرار می‌گیرد
+  secret_key_env: BOT_SECRET_KEY  # کلید برای رمزنگاری داده‌های حساس (Fernet)
+  owner_id: 123456789  # شناسه مدیر اصلی بات
+  application_review_chat: null  # در صورت نیاز می‌توانید شناسه چت خاصی برای اعلان درخواست‌ها تعیین کنید
+xp:
+  message_reward: 5
+  leaderboard_size: 10
+cups:
+  leaderboard_size: 5
+storage:
+  path: data/storage.json.enc
+logging:
+  level: INFO
+  file: logs/bot.log
+webapp:
+  host: 0.0.0.0
+  port: 8080
