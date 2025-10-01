@@ -9,6 +9,8 @@ from typing import Dict
 class TextPack:
     dm_welcome: str
     dm_apply_button: str
+    dm_status_button: str
+    dm_withdraw_button: str
     dm_application_started: str
     dm_application_question: str
     dm_application_received: str
@@ -21,6 +23,17 @@ class TextPack:
     dm_application_denied_user: str
     dm_application_approved_admin: str
     dm_application_denied_admin: str
+    dm_status_none: str
+    dm_status_pending: str
+    dm_status_approved: str
+    dm_status_denied: str
+    dm_status_withdrawn: str
+    dm_status_unknown: str
+    dm_status_template: str
+    dm_status_template_with_note: str
+    dm_status_last_updated_label: str
+    dm_withdraw_success: str
+    dm_withdraw_not_found: str
     dm_admin_added: str
     dm_admin_removed: str
     dm_not_owner: str
@@ -43,6 +56,8 @@ PERSIAN_TEXTS = TextPack(
         "برای پیوستن به گیلد، روی دکمه زیر کلیک کنید."
     ),
     dm_apply_button="درخواست عضویت در گیلد",
+    dm_status_button="مشاهده وضعیت",
+    dm_withdraw_button="لغو درخواست",
     dm_application_started=(
         "📝 لطفاً دلیل علاقه‌مندی خود برای پیوستن به گیلد را بنویسید.\n"
         "برای لغو، دستور /cancel را ارسال کنید."
@@ -70,6 +85,24 @@ PERSIAN_TEXTS = TextPack(
     dm_application_denied_user="❗️ متأسفیم، درخواست شما در حال حاضر پذیرفته نشد.",
     dm_application_approved_admin="✅ درخواست کاربر تأیید شد.",
     dm_application_denied_admin="❌ درخواست کاربر رد شد.",
+    dm_status_none="ℹ️ هنوز درخواستی ثبت نکرده‌اید.",
+    dm_status_pending="در حال بررسی",
+    dm_status_approved="تأیید شده",
+    dm_status_denied="رد شده",
+    dm_status_withdrawn="لغو شده توسط شما",
+    dm_status_unknown="نامشخص ({status})",
+    dm_status_template=(
+        "<b>وضعیت درخواست شما:</b> {status}\n"
+        "<i>{last_updated_label}: {updated_at}</i>"
+    ),
+    dm_status_template_with_note=(
+        "<b>وضعیت درخواست شما:</b> {status}\n"
+        "<i>{last_updated_label}: {updated_at}</i>\n"
+        "📝 {note}"
+    ),
+    dm_status_last_updated_label="آخرین به‌روزرسانی",
+    dm_withdraw_success="♻️ درخواست شما با موفقیت لغو شد.",
+    dm_withdraw_not_found="درخواستی در حال بررسی برای لغو یافت نشد.",
     dm_admin_added="✅ کاربر {user_id} به عنوان ادمین ثبت شد.",
     dm_admin_removed="♻️ کاربر {user_id} از لیست ادمین‌ها حذف شد.",
     dm_not_owner="⛔️ فقط مالک ربات می‌تواند این دستور را اجرا کند.",

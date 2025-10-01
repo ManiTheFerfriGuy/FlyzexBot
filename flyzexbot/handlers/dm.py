@@ -9,7 +9,7 @@ from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
 from ..localization import PERSIAN_TEXTS
-from ..services.storage import Storage
+from ..services.storage import ApplicationHistoryEntry, Storage
 from ..ui.keyboards import (application_review_keyboard,
                             glass_dm_welcome_keyboard)
 
@@ -27,11 +27,15 @@ class DMHandlers:
             CommandHandler("cancel", self.cancel, filters=private_filter),
             MessageHandler(private_filter & filters.TEXT & ~filters.COMMAND, self.receive_application),
             CallbackQueryHandler(self.handle_apply_callback, pattern="^apply_for_guild$"),
+            CallbackQueryHandler(self.show_status_callback, pattern="^application_status$"),
+            CallbackQueryHandler(self.handle_withdraw_callback, pattern="^application_withdraw$"),
             CallbackQueryHandler(self.handle_application_action, pattern=r"^application:"),
             CommandHandler("pending", self.list_applications),
             CommandHandler("admins", self.list_admins),
             CommandHandler("promote", self.promote_admin),
             CommandHandler("demote", self.demote_admin),
+            CommandHandler("status", self.status),
+            CommandHandler("withdraw", self.withdraw),
         ]
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -155,9 +159,11 @@ class DMHandlers:
         if action == "approve":
             await query.edit_message_text(PERSIAN_TEXTS.dm_application_approved_admin)
             await self._notify_user(context, target_id, PERSIAN_TEXTS.dm_application_approved_user)
+            await self.storage.mark_application_status(target_id, "approved")
         else:
             await query.edit_message_text(PERSIAN_TEXTS.dm_application_denied_admin)
             await self._notify_user(context, target_id, PERSIAN_TEXTS.dm_application_denied_user)
+            await self.storage.mark_application_status(target_id, "denied")
 
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
         try:
@@ -226,6 +232,58 @@ class DMHandlers:
             return False
         return True
 
+    async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = update.effective_user
+        chat = update.effective_chat
+        if user is None or chat is None:
+            return
+        text = self._render_status_text(self.storage.get_application_status(user.id))
+        await chat.send_message(text, parse_mode=ParseMode.HTML)
+
+    async def show_status_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        user = query.from_user
+        if user is None:
+            return
+        message = query.message
+        if message is None:
+            return
+        text = self._render_status_text(self.storage.get_application_status(user.id))
+        await message.chat.send_message(text, parse_mode=ParseMode.HTML)
+
+    async def withdraw(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = update.effective_user
+        chat = update.effective_chat
+        if user is None or chat is None:
+            return
+        success = await self.storage.withdraw_application(user.id)
+        context.user_data.pop("is_filling_application", None)
+        if success:
+            await chat.send_message(PERSIAN_TEXTS.dm_withdraw_success)
+        else:
+            await chat.send_message(PERSIAN_TEXTS.dm_withdraw_not_found)
+
+    async def handle_withdraw_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        user = query.from_user
+        if user is None:
+            return
+        message = query.message
+        if message is None:
+            return
+        success = await self.storage.withdraw_application(user.id)
+        context.user_data.pop("is_filling_application", None)
+        if success:
+            await message.chat.send_message(PERSIAN_TEXTS.dm_withdraw_success)
+        else:
+            await message.chat.send_message(PERSIAN_TEXTS.dm_withdraw_not_found)
+
     def _render_application_text(self, user_id: int) -> str:
         application = self.storage.get_application(user_id)
         if not application:
@@ -239,5 +297,38 @@ class DMHandlers:
             user_id=application.user_id,
             answer=answer,
             created_at=created_at,
+        )
+
+    def _render_status_text(self, status: ApplicationHistoryEntry | None) -> str:
+        if not status:
+            return PERSIAN_TEXTS.dm_status_none
+
+        status_map = {
+            "pending": PERSIAN_TEXTS.dm_status_pending,
+            "approved": PERSIAN_TEXTS.dm_status_approved,
+            "denied": PERSIAN_TEXTS.dm_status_denied,
+            "withdrawn": PERSIAN_TEXTS.dm_status_withdrawn,
+        }
+
+        status_label = status_map.get(status.status)
+        if not status_label:
+            status_label = PERSIAN_TEXTS.dm_status_unknown.format(status=escape(status.status))
+
+        updated_at = escape(status.updated_at)
+        last_updated_label = PERSIAN_TEXTS.dm_status_last_updated_label
+
+        if status.note:
+            note = escape(status.note)
+            return PERSIAN_TEXTS.dm_status_template_with_note.format(
+                status=status_label,
+                updated_at=updated_at,
+                note=note,
+                last_updated_label=last_updated_label,
+            )
+
+        return PERSIAN_TEXTS.dm_status_template.format(
+            status=status_label,
+            updated_at=updated_at,
+            last_updated_label=last_updated_label,
         )
 

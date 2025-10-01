@@ -41,9 +41,24 @@ def test_application_flow(tmp_path: Path) -> None:
         assert storage.has_application(10)
         application = storage.get_application(10)
         assert application is not None
-        popped = await storage.pop_application(10)
-        assert popped is not None
+        status = storage.get_application_status(10)
+        assert status is not None
+        assert status.status == "pending"
+        withdrew = await storage.withdraw_application(10)
+        assert withdrew
+        status_after_withdraw = storage.get_application_status(10)
+        assert status_after_withdraw is not None
+        assert status_after_withdraw.status == "withdrawn"
         assert not storage.has_application(10)
+
+        added_again = await storage.add_application(11, "User", "Answer 2")
+        assert added_again
+        popped = await storage.pop_application(11)
+        assert popped is not None
+        await storage.mark_application_status(11, "approved")
+        status_after_review = storage.get_application_status(11)
+        assert status_after_review is not None
+        assert status_after_review.status == "approved"
 
     asyncio.run(runner())
 

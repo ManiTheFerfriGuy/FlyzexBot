@@ -14,7 +14,19 @@ def glass_dm_welcome_keyboard() -> InlineKeyboardMarkup:
                     text=f"🪟 {PERSIAN_TEXTS.dm_apply_button}",
                     callback_data="apply_for_guild",
                 )
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"📨 {PERSIAN_TEXTS.dm_status_button}",
+                    callback_data="application_status",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"❌ {PERSIAN_TEXTS.dm_withdraw_button}",
+                    callback_data="application_withdraw",
+                )
+            ],
         ]
     )
 
