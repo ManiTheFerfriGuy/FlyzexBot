@@ -60,6 +60,12 @@ def test_application_flow(tmp_path: Path) -> None:
         assert status_after_review is not None
         assert status_after_review.status == "approved"
 
+        added_with_language = await storage.add_application(12, "User", "Answer 3", language_code="en")
+        assert added_with_language
+        application_with_language = storage.get_application(12)
+        assert application_with_language is not None
+        assert application_with_language.language_code == "en"
+
     asyncio.run(runner())
 
 
