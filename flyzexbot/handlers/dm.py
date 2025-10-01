@@ -178,28 +178,42 @@ class DMHandlers:
     async def promote_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_owner(update):
             return
-        if not context.args:
-            await update.effective_chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+        chat = update.effective_chat
+        if chat is None:
             return
-        user_id = int(context.args[0])
+        if not context.args:
+            await chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+            return
+        try:
+            user_id = int(context.args[0])
+        except ValueError:
+            await chat.send_message("شناسه باید عددی باشد.")
+            return
         added = await self.storage.add_admin(user_id)
         if added:
-            await update.effective_chat.send_message(PERSIAN_TEXTS.dm_admin_added.format(user_id=user_id))
+            await chat.send_message(PERSIAN_TEXTS.dm_admin_added.format(user_id=user_id))
         else:
-            await update.effective_chat.send_message(PERSIAN_TEXTS.dm_already_admin.format(user_id=user_id))
+            await chat.send_message(PERSIAN_TEXTS.dm_already_admin.format(user_id=user_id))
 
     async def demote_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_owner(update):
             return
-        if not context.args:
-            await update.effective_chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+        chat = update.effective_chat
+        if chat is None:
             return
-        user_id = int(context.args[0])
+        if not context.args:
+            await chat.send_message("لطفاً شناسه کاربر را وارد کنید.")
+            return
+        try:
+            user_id = int(context.args[0])
+        except ValueError:
+            await chat.send_message("شناسه باید عددی باشد.")
+            return
         removed = await self.storage.remove_admin(user_id)
         if removed:
-            await update.effective_chat.send_message(PERSIAN_TEXTS.dm_admin_removed.format(user_id=user_id))
+            await chat.send_message(PERSIAN_TEXTS.dm_admin_removed.format(user_id=user_id))
         else:
-            await update.effective_chat.send_message(PERSIAN_TEXTS.dm_not_admin.format(user_id=user_id))
+            await chat.send_message(PERSIAN_TEXTS.dm_not_admin.format(user_id=user_id))
 
     async def _check_owner(self, update: Update) -> bool:
         user = update.effective_user
