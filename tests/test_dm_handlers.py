@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 from flyzexbot.handlers.dm import DMHandlers
 from flyzexbot.localization import ENGLISH_TEXTS, PERSIAN_TEXTS
 from flyzexbot.services.storage import Application, ApplicationHistoryEntry
+from flyzexbot.ui.keyboards import glass_dm_welcome_keyboard
 
 
 class DummyChat:
@@ -52,6 +53,33 @@ class DummyContext:
         )
         self.bot_data: dict[str, object] = {}
         self.application = None
+
+
+def _flatten_keyboard(markup) -> list:
+    return [button for row in getattr(markup, "inline_keyboard", []) for button in row]
+
+
+def test_glass_dm_welcome_keyboard_includes_webapp_button_when_configured() -> None:
+    url = "https://example.com/panel"
+    markup = glass_dm_welcome_keyboard(PERSIAN_TEXTS, webapp_url=url)
+    buttons = _flatten_keyboard(markup)
+    assert any(getattr(button, "web_app", None) and button.web_app.url == url for button in buttons)
+
+
+def test_start_message_includes_webapp_button_metadata() -> None:
+    handler = DMHandlers(storage=SimpleNamespace(), owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(1), effective_chat=chat)
+    context = DummyContext([])
+    url = "https://example.com/panel"
+    context.bot_data["webapp_url"] = url
+
+    asyncio.run(handler.start(update, context))
+
+    assert chat.messages
+    markup = chat.messages[-1].get("reply_markup")
+    buttons = _flatten_keyboard(markup)
+    assert any(getattr(button, "web_app", None) and button.web_app.url == url for button in buttons)
 
 
 def test_promote_admin_invalid_identifier() -> None:

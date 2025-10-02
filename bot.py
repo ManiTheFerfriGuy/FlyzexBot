@@ -73,6 +73,9 @@ async def build_application(settings: Settings) -> None:
     application.bot_data["review_chat_id"] = settings.telegram.application_review_chat
     application.bot_data["analytics"] = analytics
     application.bot_data["storage_path"] = str(settings.storage.path)
+    webapp_url = settings.webapp.get_url()
+    if webapp_url:
+        application.bot_data["webapp_url"] = webapp_url
 
     for handler in dm_handlers.build_handlers():
         application.add_handler(handler)

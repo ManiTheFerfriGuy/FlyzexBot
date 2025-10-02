@@ -8,6 +8,7 @@ from typing import Dict
 class TextPack:
     dm_welcome: str
     dm_apply_button: str
+    dm_open_webapp_button: str
     dm_status_button: str
     dm_withdraw_button: str
     dm_application_started: str
@@ -70,6 +71,7 @@ PERSIAN_TEXTS = TextPack(
         "برای پیوستن به گیلد، روی دکمه زیر کلیک کنید."
     ),
     dm_apply_button="درخواست عضویت در گیلد",
+    dm_open_webapp_button="ورود به پنل وب",
     dm_status_button="مشاهده وضعیت",
     dm_withdraw_button="لغو درخواست",
     dm_application_started=(
@@ -163,6 +165,7 @@ ENGLISH_TEXTS = TextPack(
         "Tap the button below to apply for the guild."
     ),
     dm_apply_button="Apply to the guild",
+    dm_open_webapp_button="Open web panel",
     dm_status_button="Check status",
     dm_withdraw_button="Withdraw request",
     dm_application_started=(

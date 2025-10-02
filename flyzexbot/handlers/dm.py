@@ -63,7 +63,7 @@ class DMHandlers:
         try:
             await chat.send_message(
                 text=self._build_welcome_text(texts),
-                reply_markup=glass_dm_welcome_keyboard(texts),
+                reply_markup=glass_dm_welcome_keyboard(texts, self._get_webapp_url(context)),
                 parse_mode=ParseMode.HTML,
             )
         except Exception as exc:
@@ -481,7 +481,7 @@ class DMHandlers:
         texts = self._get_texts(context, getattr(user, "language_code", None) if user else None)
         await message.edit_text(
             text=self._build_welcome_text(texts),
-            reply_markup=glass_dm_welcome_keyboard(texts),
+            reply_markup=glass_dm_welcome_keyboard(texts, self._get_webapp_url(context)),
             parse_mode=ParseMode.HTML,
         )
         await self.analytics.record("dm.language_menu_closed")
@@ -507,12 +507,20 @@ class DMHandlers:
             return
         await message.edit_text(
             text=self._build_welcome_text(new_texts),
-            reply_markup=glass_dm_welcome_keyboard(new_texts),
+            reply_markup=glass_dm_welcome_keyboard(new_texts, self._get_webapp_url(context)),
             parse_mode=ParseMode.HTML,
         )
 
     def _build_welcome_text(self, texts: TextPack) -> str:
         return f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}"
+
+    def _get_webapp_url(self, context: ContextTypes.DEFAULT_TYPE) -> str | None:
+        bot_data = getattr(context, "bot_data", None)
+        if isinstance(bot_data, dict):
+            url = bot_data.get("webapp_url")
+            if isinstance(url, str) and url:
+                return url
+        return None
 
     def _render_application_text(self, user_id: int, texts: TextPack | None = None) -> str:
         application = self.storage.get_application(user_id)
