@@ -22,6 +22,12 @@ class TextPack:
     dm_application_denied_user: str
     dm_application_approved_admin: str
     dm_application_denied_admin: str
+    dm_application_note_prompts: Dict[str, str]
+    dm_application_note_confirmations: Dict[str, str]
+    dm_application_note_skip_hint: str
+    dm_application_note_skip_keyword: str
+    dm_application_note_label: str
+    dm_application_note_no_active: str
     dm_status_none: str
     dm_status_pending: str
     dm_status_approved: str
@@ -93,6 +99,18 @@ PERSIAN_TEXTS = TextPack(
     dm_application_denied_user="❗️ متأسفیم، درخواست شما در حال حاضر پذیرفته نشد.",
     dm_application_approved_admin="✅ درخواست کاربر تأیید شد.",
     dm_application_denied_admin="❌ درخواست کاربر رد شد.",
+    dm_application_note_prompts={
+        "approve": "✅ شما در حال تأیید {full_name} ({user_id}) هستید. لطفاً دلیل یا پیامی برای او ارسال کنید.",
+        "deny": "❌ شما در حال رد {full_name} ({user_id}) هستید. لطفاً دلیل یا توضیحی برای او ارسال کنید.",
+    },
+    dm_application_note_confirmations={
+        "approve": "✅ درخواست کاربر تأیید و پیام ارسال شد.",
+        "deny": "❌ درخواست کاربر رد و پیام ارسال شد.",
+    },
+    dm_application_note_skip_hint="برای ادامه بدون توضیح، عبارت SKIP را ارسال کنید.",
+    dm_application_note_skip_keyword="skip",
+    dm_application_note_label="یادداشت",
+    dm_application_note_no_active="ℹ️ موردی برای ثبت یادداشت وجود ندارد.",
     dm_status_none="ℹ️ هنوز درخواستی ثبت نکرده‌اید.",
     dm_status_pending="در حال بررسی",
     dm_status_approved="تأیید شده",
@@ -174,6 +192,18 @@ ENGLISH_TEXTS = TextPack(
     dm_application_denied_user="❗️ Unfortunately your application was not approved.",
     dm_application_approved_admin="✅ The application was approved.",
     dm_application_denied_admin="❌ The application was rejected.",
+    dm_application_note_prompts={
+        "approve": "✅ You chose to approve {full_name} ({user_id}). Please send a note for the applicant.",
+        "deny": "❌ You chose to deny {full_name} ({user_id}). Please share a note for the applicant.",
+    },
+    dm_application_note_confirmations={
+        "approve": "✅ The application was approved and the applicant has been notified.",
+        "deny": "❌ The application was rejected and the applicant has been notified.",
+    },
+    dm_application_note_skip_hint="Type SKIP to continue without adding a note.",
+    dm_application_note_skip_keyword="skip",
+    dm_application_note_label="Note",
+    dm_application_note_no_active="ℹ️ There is no application awaiting a note.",
     dm_status_none="ℹ️ You have not submitted an application yet.",
     dm_status_pending="In review",
     dm_status_approved="Approved",

@@ -11,7 +11,7 @@ from ..localization import (PERSIAN_TEXTS, TextPack, get_text_pack,
                             normalize_language_code)
 from ..services.analytics import AnalyticsTracker, NullAnalytics
 from ..services.security import RateLimitGuard
-from ..services.storage import ApplicationHistoryEntry, Storage
+from ..services.storage import Application, ApplicationHistoryEntry, Storage
 from ..ui.keyboards import (application_review_keyboard,
                             glass_dm_welcome_keyboard,
                             language_options_keyboard)
@@ -99,6 +99,11 @@ class DMHandlers:
         return
 
     async def receive_application(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        pending_note = context.user_data.get("pending_review_note") if isinstance(context.user_data, dict) else None
+        if pending_note:
+            await self._process_admin_note_response(update, context)
+            return
+
         if not context.user_data.get("is_filling_application"):
             return
 
@@ -208,16 +213,108 @@ class DMHandlers:
             return
 
         applicant_texts = get_text_pack(application.language_code)
-        if action == "approve":
-            await query.edit_message_text(admin_texts.dm_application_approved_admin)
-            await self._notify_user(context, target_id, applicant_texts.dm_application_approved_user)
-            await self.storage.mark_application_status(target_id, "approved")
-            await self.analytics.record("dm.admin_application_approved")
-        else:
-            await query.edit_message_text(admin_texts.dm_application_denied_admin)
-            await self._notify_user(context, target_id, applicant_texts.dm_application_denied_user)
-            await self.storage.mark_application_status(target_id, "denied")
-            await self.analytics.record("dm.admin_application_denied")
+        message = query.message
+        if message is None:
+            return
+
+        application_text = self._format_application_entry(application, admin_texts)
+        prompt_template = admin_texts.dm_application_note_prompts.get(action)
+        if not prompt_template:
+            LOGGER.error("Missing note prompt for action %s", action)
+            prompt_template = ""
+
+        prompt_text = prompt_template.format(
+            full_name=escape(str(application.full_name)),
+            user_id=target_id,
+        )
+        skip_hint = admin_texts.dm_application_note_skip_hint
+
+        context.user_data["pending_review_note"] = {
+            "action": action,
+            "target_id": target_id,
+            "applicant_texts": applicant_texts,
+            "admin_texts": admin_texts,
+            "application_text": application_text,
+            "chat_id": message.chat_id,
+            "message_id": message.message_id,
+            "full_name": application.full_name,
+        }
+
+        await message.edit_text(
+            text=f"{application_text}\n\n{prompt_text}\n{skip_hint}",
+            parse_mode=ParseMode.HTML,
+        )
+
+    async def _process_admin_note_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        message = update.message
+        user = update.effective_user
+        if message is None or user is None:
+            return
+
+        pending_note = context.user_data.get("pending_review_note")
+        if not isinstance(pending_note, dict):
+            texts = self._get_texts(context, getattr(user, "language_code", None))
+            await message.reply_text(texts.dm_application_note_no_active)
+            return
+
+        admin_texts: TextPack = pending_note["admin_texts"]
+        applicant_texts: TextPack = pending_note["applicant_texts"]
+        action: str = pending_note["action"]
+        target_id: int = pending_note["target_id"]
+        chat_id: int = pending_note["chat_id"]
+        message_id: int = pending_note["message_id"]
+        application_text: str = pending_note["application_text"]
+
+        note_raw = (message.text or "").strip()
+        skip_keyword = admin_texts.dm_application_note_skip_keyword.casefold()
+        is_skip = not note_raw or note_raw.casefold() == skip_keyword
+        note_to_store = None if is_skip else note_raw
+
+        try:
+            status = "approved" if action == "approve" else "denied"
+            await self.storage.mark_application_status(target_id, status, note=note_to_store)
+
+            applicant_message = (
+                applicant_texts.dm_application_approved_user
+                if action == "approve"
+                else applicant_texts.dm_application_denied_user
+            )
+            if note_to_store:
+                applicant_message = (
+                    f"{applicant_message}\n\n📝 {applicant_texts.dm_application_note_label}: {note_to_store}"
+                )
+            await self._notify_user(context, target_id, applicant_message)
+
+            confirmation_template = admin_texts.dm_application_note_confirmations.get(action, "")
+            confirmation_text = confirmation_template.format(
+                full_name=escape(str(pending_note.get("full_name", target_id))),
+                user_id=target_id,
+            )
+            final_text = f"{application_text}\n\n{confirmation_text}"
+            if note_to_store:
+                final_text = (
+                    f"{final_text}\n📝 {admin_texts.dm_application_note_label}: {escape(note_to_store)}"
+                )
+
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=final_text,
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as exc:  # pragma: no cover - network failures are logged
+                LOGGER.error("Failed to edit admin message for %s: %s", target_id, exc)
+
+            analytics_event = (
+                "dm.admin_application_approved"
+                if action == "approve"
+                else "dm.admin_application_denied"
+            )
+            await self.analytics.record(analytics_event)
+        finally:
+            context.user_data.pop("pending_review_note", None)
+
 
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
         try:
@@ -422,11 +519,14 @@ class DMHandlers:
         text_pack = texts or PERSIAN_TEXTS
         if not application:
             return text_pack.dm_no_pending
+        return self._format_application_entry(application, text_pack)
+
+    def _format_application_entry(self, application: Application, texts: TextPack) -> str:
         full_name = escape(str(application.full_name))
         raw_answer = application.answer if application.answer else "—"
         answer = escape(str(raw_answer))
         created_at = escape(str(application.created_at))
-        return text_pack.dm_application_item.format(
+        return texts.dm_application_item.format(
             full_name=full_name,
             user_id=application.user_id,
             answer=answer,
