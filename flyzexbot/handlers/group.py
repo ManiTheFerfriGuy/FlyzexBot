@@ -88,7 +88,7 @@ class GroupHandlers:
         if not await self._is_admin(context, chat.id, user.id):
             await chat.send_message(texts.dm_admin_only)
             return
-        if len(context.args) < 2:
+        if not context.args:
             await chat.send_message(texts.group_add_cup_usage)
             return
 
