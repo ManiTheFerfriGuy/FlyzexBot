@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -240,7 +242,21 @@ class Storage:
     async def _write_snapshot(self, payload: bytes) -> None:
         encrypted = await self._encryption.encrypt(payload)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        async with aioopen(self._path, "wb") as file:
-            await file.write(encrypted)
+
+        if self._path.suffix:
+            tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
+        else:
+            tmp_path = self._path.with_name(self._path.name + ".tmp")
+
+        try:
+            async with aioopen(tmp_path, "wb") as file:
+                await file.write(encrypted)
+                await file.flush()
+            await asyncio.to_thread(os.replace, tmp_path, self._path)
+        except Exception:
+            with contextlib.suppress(FileNotFoundError):
+                await asyncio.to_thread(tmp_path.unlink)
+            raise
+
         LOGGER.debug("storage_flushed", extra={"path": str(self._path)})
 
