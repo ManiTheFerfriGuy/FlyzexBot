@@ -1,8 +1,8 @@
-"""Encrypted JSON storage for FlyzexBot."""
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +11,9 @@ from typing import Any, Dict, List, Optional
 from aiofiles import open as aioopen
 
 from .security import EncryptionManager
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,30 +95,29 @@ class Storage:
 
         payload = json.loads(decrypted.decode("utf-8"))
         self._state = StorageState.from_dict(payload)
+        LOGGER.info("storage_loaded", extra={"path": str(self._path)})
 
     async def save(self) -> None:
-        payload = json.dumps(self._state.to_dict()).encode("utf-8")
-        encrypted = await self._encryption.encrypt(payload)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        async with aioopen(self._path, "wb") as file:
-            await file.write(encrypted)
+        payload = await self._snapshot()
+        await self._write_snapshot(payload)
 
-    # Admins
     async def add_admin(self, user_id: int) -> bool:
         async with self._lock:
             if user_id in self._state.admins:
                 return False
             self._state.admins.append(user_id)
-            await self.save()
-            return True
+        await self.save()
+        LOGGER.info("admin_added", extra={"user_id": user_id})
+        return True
 
     async def remove_admin(self, user_id: int) -> bool:
         async with self._lock:
             if user_id not in self._state.admins:
                 return False
             self._state.admins.remove(user_id)
-            await self.save()
-            return True
+        await self.save()
+        LOGGER.info("admin_removed", extra={"user_id": user_id})
+        return True
 
     def is_admin(self, user_id: int) -> bool:
         return user_id in self._state.admins
@@ -123,7 +125,6 @@ class Storage:
     def list_admins(self) -> List[int]:
         return list(self._state.admins)
 
-    # Applications
     async def add_application(
         self,
         user_id: int,
@@ -146,8 +147,9 @@ class Storage:
                 status="pending",
                 updated_at=timestamp,
             )
-            await self.save()
-            return True
+        await self.save()
+        LOGGER.info("application_added", extra={"user_id": user_id})
+        return True
 
     def has_application(self, user_id: int) -> bool:
         return user_id in self._state.applications
@@ -158,9 +160,9 @@ class Storage:
     async def pop_application(self, user_id: int) -> Optional[Application]:
         async with self._lock:
             application = self._state.applications.pop(user_id, None)
-            if application:
-                await self.save()
-            return application
+        if application:
+            await self.save()
+        return application
 
     def get_pending_applications(self) -> List[Application]:
         return list(self._state.applications.values())
@@ -175,8 +177,9 @@ class Storage:
                 status="withdrawn",
                 updated_at=timestamp,
             )
-            await self.save()
-            return True
+        await self.save()
+        LOGGER.info("application_withdrawn", extra={"user_id": user_id})
+        return True
 
     async def mark_application_status(self, user_id: int, status: str, note: Optional[str] = None) -> None:
         async with self._lock:
@@ -186,20 +189,21 @@ class Storage:
                 updated_at=timestamp,
                 note=note,
             )
-            await self.save()
+        await self.save()
+        LOGGER.info("application_status_updated", extra={"user_id": user_id, "status": status})
 
     def get_application_status(self, user_id: int) -> Optional[ApplicationHistoryEntry]:
         return self._state.application_history.get(user_id)
 
-    # XP tracking
     async def add_xp(self, chat_id: int, user_id: int, amount: int) -> int:
         async with self._lock:
             chat_key = str(chat_id)
             user_key = str(user_id)
             self._state.xp.setdefault(chat_key, {})
             self._state.xp[chat_key][user_key] = self._state.xp[chat_key].get(user_key, 0) + amount
-            await self.save()
-            return self._state.xp[chat_key][user_key]
+        await self.save()
+        LOGGER.debug("xp_added", extra={"chat_id": chat_id, "user_id": user_id, "amount": amount})
+        return self._state.xp[chat_key][user_key]
 
     def get_xp_leaderboard(self, chat_id: int, limit: int) -> List[tuple[str, int]]:
         chat_key = str(chat_id)
@@ -207,7 +211,6 @@ class Storage:
         sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
         return sorted_scores[:limit]
 
-    # Cups
     async def add_cup(self, chat_id: int, title: str, description: str, podium: List[str]) -> None:
         async with self._lock:
             chat_key = str(chat_id)
@@ -220,11 +223,24 @@ class Storage:
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
-            await self.save()
+        await self.save()
+        LOGGER.info("cup_added", extra={"chat_id": chat_id, "title": title})
 
     def get_cups(self, chat_id: int, limit: int) -> List[Dict[str, Any]]:
         chat_key = str(chat_id)
         cups = self._state.cups.get(chat_key, [])
         cups_sorted = sorted(cups, key=lambda item: item["created_at"], reverse=True)
         return cups_sorted[:limit]
+
+    async def _snapshot(self) -> bytes:
+        async with self._lock:
+            payload = json.dumps(self._state.to_dict()).encode("utf-8")
+        return payload
+
+    async def _write_snapshot(self, payload: bytes) -> None:
+        encrypted = await self._encryption.encrypt(payload)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        async with aioopen(self._path, "wb") as file:
+            await file.write(encrypted)
+        LOGGER.debug("storage_flushed", extra={"path": str(self._path)})
 

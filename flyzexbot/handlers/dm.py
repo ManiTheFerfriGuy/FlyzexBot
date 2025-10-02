@@ -1,4 +1,3 @@
-"""Direct message handlers for FlyzexBot."""
 from __future__ import annotations
 
 from html import escape
@@ -10,16 +9,27 @@ from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
 
 from ..localization import (PERSIAN_TEXTS, TextPack, get_text_pack,
                             normalize_language_code)
+from ..services.analytics import AnalyticsTracker, NullAnalytics
+from ..services.security import RateLimitGuard
 from ..services.storage import ApplicationHistoryEntry, Storage
 from ..ui.keyboards import (application_review_keyboard,
-                            glass_dm_welcome_keyboard)
+                            glass_dm_welcome_keyboard,
+                            language_options_keyboard)
 
 LOGGER = logging.getLogger(__name__)
 
 class DMHandlers:
-    def __init__(self, storage: Storage, owner_id: int) -> None:
+    def __init__(
+        self,
+        storage: Storage,
+        owner_id: int,
+        analytics: AnalyticsTracker | NullAnalytics | None = None,
+        rate_limiter: RateLimitGuard | None = None,
+    ) -> None:
         self.storage = storage
         self.owner_id = owner_id
+        self.analytics = analytics or NullAnalytics()
+        self.rate_limiter = rate_limiter or RateLimitGuard(10.0, 5)
 
     def build_handlers(self) -> list:
         private_filter = filters.ChatType.PRIVATE
@@ -30,6 +40,9 @@ class DMHandlers:
             CallbackQueryHandler(self.handle_apply_callback, pattern="^apply_for_guild$"),
             CallbackQueryHandler(self.show_status_callback, pattern="^application_status$"),
             CallbackQueryHandler(self.handle_withdraw_callback, pattern="^application_withdraw$"),
+            CallbackQueryHandler(self.show_language_menu, pattern="^language_menu$"),
+            CallbackQueryHandler(self.close_language_menu, pattern="^close_language_menu$"),
+            CallbackQueryHandler(self.set_language_callback, pattern=r"^set_language:"),
             CallbackQueryHandler(self.handle_application_action, pattern=r"^application:"),
             CommandHandler("pending", self.list_applications),
             CommandHandler("admins", self.list_admins),
@@ -40,17 +53,21 @@ class DMHandlers:
         ]
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if update.effective_chat is None:
-            return
-
+        chat = update.effective_chat
         user = update.effective_user
+        if chat is None:
+            return
         language_code = getattr(user, "language_code", None) if user else None
         texts = self._get_texts(context, language_code)
-        await update.effective_chat.send_message(
-            text=f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}",
-            reply_markup=glass_dm_welcome_keyboard(texts),
-            parse_mode=ParseMode.HTML,
-        )
+        await self.analytics.record("dm.start")
+        try:
+            await chat.send_message(
+                text=self._build_welcome_text(texts),
+                reply_markup=glass_dm_welcome_keyboard(texts),
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as exc:
+            LOGGER.error("Failed to send welcome message: %s", exc)
 
     async def handle_apply_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -63,6 +80,7 @@ class DMHandlers:
             return
 
         texts = self._get_texts(context, getattr(user, "language_code", None))
+        await self.analytics.record("dm.apply_requested")
         if self.storage.is_admin(user.id):
             await query.edit_message_text(
                 text=texts.dm_admin_only,
@@ -89,13 +107,25 @@ class DMHandlers:
             return
 
         texts = self._get_texts(context, getattr(user, "language_code", None))
+        if not await self.rate_limiter.is_allowed(user.id):
+            await self.analytics.record("dm.rate_limited")
+            await update.message.reply_text(texts.dm_rate_limited)
+            return
         answer = update.message.text.strip()
-        success = await self.storage.add_application(
-            user_id=user.id,
-            full_name=user.full_name or user.username or str(user.id),
-            answer=answer,
-            language_code=context.user_data.get("preferred_language"),
-        )
+        try:
+            async with self.analytics.track_time("dm.application_store"):
+                success = await self.storage.add_application(
+                    user_id=user.id,
+                    full_name=user.full_name or user.username or str(user.id),
+                    answer=answer,
+                    language_code=context.user_data.get("preferred_language"),
+                )
+        except Exception as exc:
+            LOGGER.error("Failed to persist application for %s: %s", user.id, exc)
+            await self.analytics.record("dm.application_error")
+            await update.message.reply_text(texts.error_generic)
+            context.user_data.pop("is_filling_application", None)
+            return
         if not success:
             LOGGER.warning("Duplicate application prevented for user %s", user.id)
             await update.message.reply_text(texts.dm_application_duplicate)
@@ -103,13 +133,16 @@ class DMHandlers:
             return
 
         await update.message.reply_text(texts.dm_application_received)
+        await self.analytics.record("dm.application_submitted")
         review_chat_id = context.bot_data.get("review_chat_id")
-        if review_chat_id:
-            await context.bot.send_message(
-                chat_id=review_chat_id,
-                text=self._render_application_text(user.id),
-                parse_mode=ParseMode.HTML,
-                reply_markup=application_review_keyboard(user.id),
+        if review_chat_id and context.application:
+            context.application.create_task(
+                context.bot.send_message(
+                    chat_id=review_chat_id,
+                    text=self._render_application_text(user.id),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=application_review_keyboard(user.id, PERSIAN_TEXTS),
+                )
             )
         context.user_data.pop("is_filling_application", None)
         return
@@ -120,6 +153,7 @@ class DMHandlers:
         texts = self._get_texts(context, language_code)
         if update.message:
             await update.message.reply_text(texts.dm_cancelled)
+        await self.analytics.record("dm.cancelled")
 
     async def list_applications(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.effective_user
@@ -135,6 +169,8 @@ class DMHandlers:
         if not pending:
             await chat.send_message(texts.dm_no_pending)
             return
+
+        await self.analytics.record("dm.admin_pending_list")
 
         for application in pending[:5]:
             await chat.send_message(
@@ -161,6 +197,7 @@ class DMHandlers:
         data = query.data
         if data == "application:skip":
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
+            await self.analytics.record("dm.admin_skip_application")
             return
 
         _, user_id_str, action = data.split(":")
@@ -175,15 +212,17 @@ class DMHandlers:
             await query.edit_message_text(admin_texts.dm_application_approved_admin)
             await self._notify_user(context, target_id, applicant_texts.dm_application_approved_user)
             await self.storage.mark_application_status(target_id, "approved")
+            await self.analytics.record("dm.admin_application_approved")
         else:
             await query.edit_message_text(admin_texts.dm_application_denied_admin)
             await self._notify_user(context, target_id, applicant_texts.dm_application_denied_user)
             await self.storage.mark_application_status(target_id, "denied")
+            await self.analytics.record("dm.admin_application_denied")
 
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
         try:
             await context.bot.send_message(chat_id=user_id, text=text)
-        except Exception as exc:  # noqa: BLE001 - handled generically
+        except Exception as exc:
             LOGGER.error("Failed to notify user %s: %s", user_id, exc)
 
     async def list_admins(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -262,6 +301,7 @@ class DMHandlers:
         texts = self._get_texts(context, getattr(user, "language_code", None))
         text = self._render_status_text(self.storage.get_application_status(user.id), texts)
         await chat.send_message(text, parse_mode=ParseMode.HTML)
+        await self.analytics.record("dm.status_requested")
 
     async def show_status_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -277,6 +317,7 @@ class DMHandlers:
         texts = self._get_texts(context, getattr(user, "language_code", None))
         text = self._render_status_text(self.storage.get_application_status(user.id), texts)
         await message.chat.send_message(text, parse_mode=ParseMode.HTML)
+        await self.analytics.record("dm.status_requested")
 
     async def withdraw(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.effective_user
@@ -288,8 +329,10 @@ class DMHandlers:
         context.user_data.pop("is_filling_application", None)
         if success:
             await chat.send_message(texts.dm_withdraw_success)
+            await self.analytics.record("dm.withdraw_completed")
         else:
             await chat.send_message(texts.dm_withdraw_not_found)
+            await self.analytics.record("dm.withdraw_missing")
 
     async def handle_withdraw_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -307,8 +350,72 @@ class DMHandlers:
         context.user_data.pop("is_filling_application", None)
         if success:
             await message.chat.send_message(texts.dm_withdraw_success)
+            await self.analytics.record("dm.withdraw_completed")
         else:
             await message.chat.send_message(texts.dm_withdraw_not_found)
+            await self.analytics.record("dm.withdraw_missing")
+
+    async def show_language_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        user = query.from_user
+        message = query.message
+        if message is None:
+            return
+        texts = self._get_texts(context, getattr(user, "language_code", None) if user else None)
+        active = context.user_data.get("preferred_language") if isinstance(context.user_data, dict) else None
+        await message.edit_text(
+            text=texts.dm_language_menu_title,
+            reply_markup=language_options_keyboard(active if isinstance(active, str) else None, texts),
+        )
+        await self.analytics.record("dm.language_menu_opened")
+
+    async def close_language_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        await query.answer()
+        message = query.message
+        user = query.from_user
+        if message is None:
+            return
+        texts = self._get_texts(context, getattr(user, "language_code", None) if user else None)
+        await message.edit_text(
+            text=self._build_welcome_text(texts),
+            reply_markup=glass_dm_welcome_keyboard(texts),
+            parse_mode=ParseMode.HTML,
+        )
+        await self.analytics.record("dm.language_menu_closed")
+
+    async def set_language_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        data = query.data or ""
+        parts = data.split(":", 1)
+        if len(parts) != 2:
+            await query.answer()
+            return
+        _, code = parts
+        normalised = normalize_language_code(code) or code
+        if isinstance(context.user_data, dict):
+            context.user_data["preferred_language"] = normalised
+        new_texts = get_text_pack(normalised)
+        await self.analytics.record("dm.language_updated")
+        await query.answer(new_texts.dm_language_updated, show_alert=True)
+        message = query.message
+        if message is None:
+            return
+        await message.edit_text(
+            text=self._build_welcome_text(new_texts),
+            reply_markup=glass_dm_welcome_keyboard(new_texts),
+            parse_mode=ParseMode.HTML,
+        )
+
+    def _build_welcome_text(self, texts: TextPack) -> str:
+        return f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}"
 
     def _render_application_text(self, user_id: int, texts: TextPack | None = None) -> str:
         application = self.storage.get_application(user_id)
@@ -365,8 +472,6 @@ class DMHandlers:
         context: ContextTypes.DEFAULT_TYPE,
         language_code: str | None = None,
     ) -> TextPack:
-        """Resolve the most appropriate text pack for the current user."""
-
         user_data = getattr(context, "user_data", None)
         stored_language = None
         if isinstance(user_data, dict):

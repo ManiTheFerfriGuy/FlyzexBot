@@ -1,4 +1,3 @@
-"""Localised texts for FlyzexBot."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -51,6 +50,12 @@ class TextPack:
     error_generic: str
     glass_panel_caption: str
     admin_list_header: str
+    dm_rate_limited: str
+    dm_language_button: str
+    dm_language_menu_title: str
+    dm_language_close_button: str
+    dm_language_updated: str
+    group_refresh_button: str
 
 
 PERSIAN_TEXTS = TextPack(
@@ -125,6 +130,12 @@ PERSIAN_TEXTS = TextPack(
         "<i>طراحی شیشه‌ای با پس‌زمینه‌ی محو و دکمه‌های درخشان برای تجربه‌ای مدرن.</i>"
     ),
     admin_list_header="👮‍♂️ ادمین‌های فعال:\n{admins}",
+    dm_rate_limited="⏳ درخواست‌های شما موقتاً محدود شده است. لطفاً چند لحظه بعد دوباره تلاش کنید.",
+    dm_language_button="تغییر زبان",
+    dm_language_menu_title="یک زبان را انتخاب کنید:",
+    dm_language_close_button="بازگشت",
+    dm_language_updated="✅ زبان ربات به‌روزرسانی شد.",
+    group_refresh_button="🔄 تازه‌سازی",
 )
 
 
@@ -200,6 +211,12 @@ ENGLISH_TEXTS = TextPack(
         "<i>Glassmorphic styling with soft blur for a modern experience.</i>"
     ),
     admin_list_header="👮‍♂️ Active admins:\n{admins}",
+    dm_rate_limited="⏳ You are sending requests too quickly. Please try again shortly.",
+    dm_language_button="Change language",
+    dm_language_menu_title="Choose a language:",
+    dm_language_close_button="Back",
+    dm_language_updated="✅ Language updated successfully.",
+    group_refresh_button="🔄 Refresh",
 )
 
 
@@ -212,16 +229,12 @@ _TEXT_PACKS: Dict[str, TextPack] = {
 
 
 def normalize_language_code(language_code: str | None) -> str | None:
-    """Return a normalised ISO language code suitable for lookups."""
-
     if not language_code:
         return None
     return language_code.split("-")[0].lower()
 
 
 def get_text_pack(language_code: str | None) -> TextPack:
-    """Retrieve a :class:`TextPack` for the requested language."""
-
     normalised = normalize_language_code(language_code)
     if normalised and normalised in _TEXT_PACKS:
         return _TEXT_PACKS[normalised]
