@@ -9,7 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
-from ..localization import PERSIAN_TEXTS
+from ..localization import PERSIAN_TEXTS, TextPack, get_text_pack, normalize_language_code
 from ..services.analytics import AnalyticsTracker, NullAnalytics
 from ..services.storage import Storage
 from ..ui.keyboards import leaderboard_refresh_keyboard
@@ -47,6 +47,7 @@ class GroupHandlers:
             return
         if message.text and message.text.startswith("/"):
             return
+        texts = self._get_texts(context, getattr(update.effective_user, "language_code", None))
         try:
             async with self.analytics.track_time("group.track_activity"):
                 new_score = await self.storage.add_xp(
@@ -60,7 +61,7 @@ class GroupHandlers:
             return
         if new_score % (self.xp_reward * 5) == 0:
             await message.reply_text(
-                PERSIAN_TEXTS.group_xp_updated.format(
+                texts.group_xp_updated.format(
                     full_name=update.effective_user.full_name
                     or update.effective_user.username
                     or str(update.effective_user.id),
@@ -73,8 +74,9 @@ class GroupHandlers:
         chat = update.effective_chat
         if chat is None:
             return
+        texts = self._get_texts(context, getattr(update.effective_user, "language_code", None))
         await self.analytics.record("group.xp_leaderboard_requested")
-        text, mode, markup = await self._compose_xp_leaderboard(context, chat.id)
+        text, mode, markup = await self._compose_xp_leaderboard(context, chat.id, texts)
         await chat.send_message(text, parse_mode=mode, reply_markup=markup)
 
     async def add_cup(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -82,11 +84,12 @@ class GroupHandlers:
         user = update.effective_user
         if chat is None or user is None:
             return
+        texts = self._get_texts(context, getattr(user, "language_code", None))
         if not await self._is_admin(context, chat.id, user.id):
-            await chat.send_message(PERSIAN_TEXTS.dm_admin_only)
+            await chat.send_message(texts.dm_admin_only)
             return
         if len(context.args) < 2:
-            await chat.send_message("استفاده: /add_cup عنوان | توضیح | قهرمان,نایب‌قهرمان,سوم")
+            await chat.send_message(texts.group_add_cup_usage)
             return
 
         raw = " ".join(context.args)
@@ -94,25 +97,26 @@ class GroupHandlers:
             title, description, podium_raw = [part.strip() for part in raw.split("|")]
             podium = [slot.strip() for slot in podium_raw.split(",") if slot.strip()]
         except ValueError:
-            await chat.send_message("ساختار ورودی صحیح نیست. از جداکننده | استفاده کنید.")
+            await chat.send_message(texts.group_add_cup_invalid_format)
             return
 
         try:
             await self.storage.add_cup(chat.id, title, description, podium)
         except Exception as exc:
             LOGGER.error("Failed to add cup in chat %s: %s", chat.id, exc)
-            await chat.send_message(PERSIAN_TEXTS.group_no_data)
+            await chat.send_message(texts.group_no_data)
             await self.analytics.record("group.cup_add_error")
             return
-        await chat.send_message(PERSIAN_TEXTS.group_cup_added.format(title=title))
+        await chat.send_message(texts.group_cup_added.format(title=title))
         await self.analytics.record("group.cup_added")
 
     async def show_cup_leaderboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = update.effective_chat
         if chat is None:
             return
+        texts = self._get_texts(context, getattr(update.effective_user, "language_code", None))
         await self.analytics.record("group.cup_leaderboard_requested")
-        text, mode, markup = self._compose_cup_leaderboard(chat.id)
+        text, mode, markup = self._compose_cup_leaderboard(chat.id, texts)
         await chat.send_message(text, parse_mode=mode, reply_markup=markup)
 
     async def handle_leaderboard_refresh(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -131,11 +135,12 @@ class GroupHandlers:
             chat_id = int(chat_id_raw)
         except ValueError:
             return
+        texts = self._get_texts(context, getattr(query.from_user, "language_code", None))
         if board_type == "xp":
-            text, mode, markup = await self._compose_xp_leaderboard(context, chat_id)
+            text, mode, markup = await self._compose_xp_leaderboard(context, chat_id, texts)
             await self.analytics.record("group.xp_leaderboard_refreshed")
         else:
-            text, mode, markup = self._compose_cup_leaderboard(chat_id)
+            text, mode, markup = self._compose_cup_leaderboard(chat_id, texts)
             await self.analytics.record("group.cup_leaderboard_refreshed")
         await message.edit_text(text, parse_mode=mode, reply_markup=markup)
 
@@ -163,38 +168,62 @@ class GroupHandlers:
             resolved.append((display, xp))
         return resolved
 
+    def _get_texts(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        language_code: str | None = None,
+    ) -> TextPack:
+        chat_data = getattr(context, "chat_data", None)
+        stored_language = None
+        if isinstance(chat_data, dict):
+            stored_language = chat_data.get("preferred_language")
+
+        normalised = normalize_language_code(language_code)
+        if normalised:
+            if isinstance(chat_data, dict):
+                chat_data["preferred_language"] = normalised
+            return get_text_pack(normalised)
+
+        if isinstance(stored_language, str):
+            return get_text_pack(stored_language)
+
+        return get_text_pack(None)
+
     async def _compose_xp_leaderboard(
         self,
         context: ContextTypes.DEFAULT_TYPE,
         chat_id: int,
+        texts: TextPack,
     ) -> Tuple[str, ParseMode | None, InlineKeyboardMarkup | None]:
         leaderboard = self.storage.get_xp_leaderboard(chat_id, self.xp_limit)
         if not leaderboard:
-            return (PERSIAN_TEXTS.group_no_data, None, None)
+            return (texts.group_no_data, None, None)
         resolved = await self._resolve_leaderboard_names(context, chat_id, leaderboard)
-        lines: List[str] = [PERSIAN_TEXTS.group_xp_leaderboard_title]
+        lines: List[str] = [texts.group_xp_leaderboard_title]
         for index, (display_name, xp) in enumerate(resolved, start=1):
             safe_name = escape(str(display_name))
             lines.append(f"{index}. <b>{safe_name}</b> — <code>{xp}</code>")
         text = "\n".join(lines)
-        markup = leaderboard_refresh_keyboard("xp", chat_id, PERSIAN_TEXTS)
+        markup = leaderboard_refresh_keyboard("xp", chat_id, texts)
         return (text, ParseMode.HTML, markup)
 
     def _compose_cup_leaderboard(
         self,
         chat_id: int,
+        texts: TextPack,
     ) -> Tuple[str, ParseMode | None, InlineKeyboardMarkup | None]:
         cups = self.storage.get_cups(chat_id, self.cups_limit)
         if not cups:
-            return (PERSIAN_TEXTS.group_no_data, None, None)
-        lines: List[str] = [PERSIAN_TEXTS.group_cup_leaderboard_title]
+            return (texts.group_no_data, None, None)
+        lines: List[str] = [texts.group_cup_leaderboard_title]
         for cup in cups:
             title = escape(str(cup.get("title", "")))
             description = escape(str(cup.get("description", "")))
             podium_entries = [escape(str(slot)) for slot in cup.get("podium", []) if slot]
-            podium = "، ".join(podium_entries) if podium_entries else "—"
+            separator = "، " if texts is PERSIAN_TEXTS else ", "
+            podium = separator.join(podium_entries) if podium_entries else "—"
             lines.append(f"<b>{title}</b> — {description}\n🥇 {podium}")
         text = "\n\n".join(lines)
-        markup = leaderboard_refresh_keyboard("cups", chat_id, PERSIAN_TEXTS)
+        markup = leaderboard_refresh_keyboard("cups", chat_id, texts)
         return (text, ParseMode.HTML, markup)
 

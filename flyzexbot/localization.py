@@ -54,6 +54,8 @@ class TextPack:
     group_cup_added: str
     group_cup_leaderboard_title: str
     group_no_data: str
+    group_add_cup_usage: str
+    group_add_cup_invalid_format: str
     error_generic: str
     glass_panel_caption: str
     admin_list_header: str
@@ -145,6 +147,8 @@ PERSIAN_TEXTS = TextPack(
     group_cup_added="🏆 جام جدید با عنوان «{title}» ثبت شد.",
     group_cup_leaderboard_title="🥇 جدول جام‌های گیلد",
     group_no_data="هنوز داده‌ای ثبت نشده است.",
+    group_add_cup_usage="استفاده: /add_cup عنوان | توضیح | قهرمان,نایب‌قهرمان,سوم",
+    group_add_cup_invalid_format="ساختار ورودی صحیح نیست. از جداکننده | استفاده کنید.",
     error_generic="⚠️ خطایی رخ داد. لطفاً مجدداً تلاش کنید.",
     glass_panel_caption=(
         "<i>طراحی شیشه‌ای با پس‌زمینه‌ی محو و دکمه‌های درخشان برای تجربه‌ای مدرن.</i>"
@@ -239,6 +243,8 @@ ENGLISH_TEXTS = TextPack(
     group_cup_added="🏆 A new cup titled \"{title}\" has been added.",
     group_cup_leaderboard_title="🥇 Guild cups leaderboard",
     group_no_data="No data has been recorded yet.",
+    group_add_cup_usage="Usage: /add_cup Title | Description | Champion,Runner-up,Third",
+    group_add_cup_invalid_format="The input format is invalid. Please use the | separator.",
     error_generic="⚠️ Something went wrong. Please try again.",
     glass_panel_caption=(
         "<i>Glassmorphic styling with soft blur for a modern experience.</i>"

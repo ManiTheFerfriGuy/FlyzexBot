@@ -87,7 +87,20 @@ async def test_dm_application_rendering_escapes_html() -> None:
 
 
 @pytest.mark.anyio("asyncio")
-async def test_group_leaderboards_escape_user_generated_content(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "language_code,expected_xp_title,expected_cup_title,expected_separator",
+    [
+        ("fa", "🏆 جدول تجربه اعضای فعال", "🥇 جدول جام‌های گیلد", "، "),
+        ("en", "🏆 Active members leaderboard", "🥇 Guild cups leaderboard", ", "),
+    ],
+)
+async def test_group_leaderboards_escape_user_generated_content(
+    monkeypatch: pytest.MonkeyPatch,
+    language_code: str,
+    expected_xp_title: str,
+    expected_cup_title: str,
+    expected_separator: str,
+) -> None:
     storage = GroupStorageStub()
     handlers = GroupHandlers(storage, xp_reward=5, xp_limit=5, cups_limit=5)
     monkeypatch.setattr(
@@ -97,27 +110,31 @@ async def test_group_leaderboards_escape_user_generated_content(monkeypatch: pyt
     )
 
     chat_xp = DummyChat(chat_id=100)
-    update_xp = SimpleNamespace(effective_chat=chat_xp)
-    context = SimpleNamespace()
+    user = SimpleNamespace(id=1, language_code=language_code, full_name="Test User")
+    update_xp = SimpleNamespace(effective_chat=chat_xp, effective_user=user)
+    context = SimpleNamespace(chat_data={})
 
     await handlers.show_xp_leaderboard(update_xp, context)
 
     assert chat_xp.messages, "XP leaderboard message should be sent"
     xp_text = chat_xp.messages[0]["text"]
     xp_mode = chat_xp.messages[0]["parse_mode"]
+    assert xp_text.splitlines()[0] == expected_xp_title
     assert "Hero &lt;One&gt;" in xp_text
     assert xp_mode == ParseMode.HTML
 
     chat_cup = DummyChat(chat_id=100)
-    update_cup = SimpleNamespace(effective_chat=chat_cup)
+    update_cup = SimpleNamespace(effective_chat=chat_cup, effective_user=user)
 
     await handlers.show_cup_leaderboard(update_cup, context)
 
     assert chat_cup.messages, "Cup leaderboard message should be sent"
     cup_text = chat_cup.messages[0]["text"]
     cup_mode = chat_cup.messages[0]["parse_mode"]
+    assert cup_text.splitlines()[0] == expected_cup_title
     assert "Champions &lt;Cup&gt;" in cup_text
     assert "Best &amp; Bold" in cup_text
     assert "Alice &lt;A&gt;" in cup_text
     assert "Bob &amp; Co" in cup_text
+    assert expected_separator in cup_text
     assert cup_mode == ParseMode.HTML
