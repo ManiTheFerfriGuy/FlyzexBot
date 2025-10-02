@@ -1,4 +1,3 @@
-"""Configuration loader for FlyzexBot."""
 from __future__ import annotations
 
 import os
@@ -46,6 +45,17 @@ class WebAppConfig:
 
 
 @dataclass
+class SecurityConfig:
+    rate_limit_interval: float
+    rate_limit_burst: int
+
+
+@dataclass
+class AnalyticsConfig:
+    flush_interval: float
+
+
+@dataclass
 class Settings:
     telegram: TelegramConfig
     xp: XPConfig
@@ -53,6 +63,8 @@ class Settings:
     storage: StorageConfig
     logging: LoggingConfig
     webapp: WebAppConfig
+    security: SecurityConfig
+    analytics: AnalyticsConfig
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -91,6 +103,17 @@ class Settings:
             port=int(webapp_cfg.get("port", 8080)),
         )
 
+        security_cfg = data.get("security", {})
+        security = SecurityConfig(
+            rate_limit_interval=float(security_cfg.get("rate_limit_interval", 10.0)),
+            rate_limit_burst=int(security_cfg.get("rate_limit_burst", 5)),
+        )
+
+        analytics_cfg = data.get("analytics", {})
+        analytics = AnalyticsConfig(
+            flush_interval=float(analytics_cfg.get("flush_interval", 60.0)),
+        )
+
         return cls(
             telegram=telegram,
             xp=xp,
@@ -98,6 +121,8 @@ class Settings:
             storage=storage,
             logging=logging_config,
             webapp=webapp,
+            security=security,
+            analytics=analytics,
         )
 
     def get_bot_token(self) -> str:
