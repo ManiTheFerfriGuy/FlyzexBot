@@ -42,6 +42,22 @@ class LoggingConfig:
 class WebAppConfig:
     host: str
     port: int
+    url: Optional[str] = None
+
+    def get_url(self) -> Optional[str]:
+        """Return a fully-qualified URL for the configured WebApp."""
+
+        if self.url:
+            return self.url
+
+        if not self.host:
+            return None
+
+        scheme = "https" if self.port == 443 else "http"
+        if self.port in (80, 443):
+            return f"{scheme}://{self.host}"
+
+        return f"{scheme}://{self.host}:{self.port}"
 
 
 @dataclass
@@ -101,6 +117,7 @@ class Settings:
         webapp = WebAppConfig(
             host=webapp_cfg.get("host", "0.0.0.0"),
             port=int(webapp_cfg.get("port", 8080)),
+            url=webapp_cfg.get("url"),
         )
 
         security_cfg = data.get("security", {})

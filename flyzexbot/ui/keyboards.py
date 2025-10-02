@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from ..localization import PERSIAN_TEXTS, TextPack
 
@@ -8,7 +8,9 @@ from ..localization import PERSIAN_TEXTS, TextPack
 LANGUAGE_OPTIONS: list[tuple[str, str]] = [("fa", "فارسی"), ("en", "English")]
 
 
-def glass_dm_welcome_keyboard(texts: TextPack | None = None) -> InlineKeyboardMarkup:
+def glass_dm_welcome_keyboard(
+    texts: TextPack | None = None, webapp_url: str | None = None
+) -> InlineKeyboardMarkup:
     text_pack = texts or PERSIAN_TEXTS
     rows = [
         [
@@ -36,6 +38,15 @@ def glass_dm_welcome_keyboard(texts: TextPack | None = None) -> InlineKeyboardMa
             )
         ],
     ]
+    if webapp_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🧊 {text_pack.dm_open_webapp_button}",
+                    web_app=WebAppInfo(url=webapp_url),
+                )
+            ]
+        )
     return InlineKeyboardMarkup(rows)
 
 
