@@ -9,7 +9,10 @@ LANGUAGE_OPTIONS: list[tuple[str, str]] = [("fa", "فارسی"), ("en", "English
 
 
 def glass_dm_welcome_keyboard(
-    texts: TextPack | None = None, webapp_url: str | None = None
+    texts: TextPack | None = None,
+    webapp_url: str | None = None,
+    *,
+    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
     text_pack = texts or PERSIAN_TEXTS
     rows = [
@@ -44,6 +47,15 @@ def glass_dm_welcome_keyboard(
                 InlineKeyboardButton(
                     text=f"🧊 {text_pack.dm_open_webapp_button}",
                     web_app=WebAppInfo(url=webapp_url),
+                )
+            ]
+        )
+    if is_admin:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🛡️ {text_pack.dm_admin_panel_button}",
+                    callback_data="admin_panel",
                 )
             ]
         )

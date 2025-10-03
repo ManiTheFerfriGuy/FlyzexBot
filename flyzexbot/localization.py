@@ -9,6 +9,7 @@ class TextPack:
     dm_welcome: str
     dm_apply_button: str
     dm_open_webapp_button: str
+    dm_admin_panel_button: str
     dm_status_button: str
     dm_withdraw_button: str
     dm_application_started: str
@@ -65,6 +66,7 @@ class TextPack:
     dm_language_close_button: str
     dm_language_updated: str
     group_refresh_button: str
+    dm_admin_panel_intro: str
 
 
 PERSIAN_TEXTS = TextPack(
@@ -74,6 +76,7 @@ PERSIAN_TEXTS = TextPack(
     ),
     dm_apply_button="درخواست عضویت در گیلد",
     dm_open_webapp_button="ورود به پنل وب",
+    dm_admin_panel_button="ورود به پنل ادمین",
     dm_status_button="مشاهده وضعیت",
     dm_withdraw_button="لغو درخواست",
     dm_application_started=(
@@ -160,6 +163,10 @@ PERSIAN_TEXTS = TextPack(
     dm_language_close_button="بازگشت",
     dm_language_updated="✅ زبان ربات به‌روزرسانی شد.",
     group_refresh_button="🔄 تازه‌سازی",
+    dm_admin_panel_intro=(
+        "<b>🛡️ پنل مدیریت فلیزکس</b>\n"
+        "آخرین درخواست‌های در انتظار بررسی در زیر نمایش داده می‌شوند."
+    ),
 )
 
 
@@ -170,6 +177,7 @@ ENGLISH_TEXTS = TextPack(
     ),
     dm_apply_button="Apply to the guild",
     dm_open_webapp_button="Open web panel",
+    dm_admin_panel_button="Open admin panel",
     dm_status_button="Check status",
     dm_withdraw_button="Withdraw request",
     dm_application_started=(
@@ -256,6 +264,10 @@ ENGLISH_TEXTS = TextPack(
     dm_language_close_button="Back",
     dm_language_updated="✅ Language updated successfully.",
     group_refresh_button="🔄 Refresh",
+    dm_admin_panel_intro=(
+        "<b>🛡️ Flyzex admin panel</b>\n"
+        "Pending applications appear below for quick review."
+    ),
 )
 
 
