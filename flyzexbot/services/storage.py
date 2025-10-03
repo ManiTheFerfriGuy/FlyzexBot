@@ -197,6 +197,13 @@ class Storage:
     def get_application_status(self, user_id: int) -> Optional[ApplicationHistoryEntry]:
         return self._state.application_history.get(user_id)
 
+    def get_applicants_by_status(self, status: str) -> List[tuple[int, ApplicationHistoryEntry]]:
+        return [
+            (user_id, history)
+            for user_id, history in self._state.application_history.items()
+            if history.status == status
+        ]
+
     async def add_xp(self, chat_id: int, user_id: int, amount: int) -> int:
         async with self._lock:
             chat_key = str(chat_id)
