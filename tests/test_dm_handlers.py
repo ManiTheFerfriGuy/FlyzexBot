@@ -37,6 +37,14 @@ class DummyIncomingMessage:
         self.replies.append(text)
 
 
+class DummyCallbackQuery:
+    def __init__(self, user: DummyUser, chat: DummyChat) -> None:
+        self.from_user = user
+        self.message = SimpleNamespace(chat=chat)
+        self.answer = AsyncMock()
+        self.edit_message_text = AsyncMock()
+
+
 class DummyUser:
     def __init__(self, user_id: int, language_code: str = "fa") -> None:
         self.id = user_id
@@ -57,6 +65,46 @@ class DummyContext:
 
 def _flatten_keyboard(markup) -> list:
     return [button for row in getattr(markup, "inline_keyboard", []) for button in row]
+
+
+def test_handle_apply_allows_admins_to_start_application() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        has_application=lambda _: False,
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(10)
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_apply_callback(update, context))
+
+    query.answer.assert_awaited()
+    query.edit_message_text.assert_awaited_once_with(text=PERSIAN_TEXTS.dm_application_started)
+    assert context.user_data.get("is_filling_application") is True
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_application_question
+
+
+def test_handle_apply_prevents_duplicate_for_admin() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        has_application=lambda _: True,
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(11)
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_apply_callback(update, context))
+
+    query.answer.assert_awaited()
+    query.edit_message_text.assert_awaited_once_with(PERSIAN_TEXTS.dm_application_duplicate)
+    assert "is_filling_application" not in context.user_data
+    assert chat.messages == []
 
 
 def test_glass_dm_welcome_keyboard_includes_webapp_button_when_configured() -> None:
@@ -145,6 +193,18 @@ def test_withdraw_not_found() -> None:
 
     storage.withdraw_application.assert_awaited_once_with(6)
     assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_withdraw_not_found
+
+
+def test_list_applications_requires_admin_privileges() -> None:
+    storage = SimpleNamespace(is_admin=lambda _: False, get_pending_applications=lambda: [])
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(12), effective_chat=chat)
+    context = DummyContext([])
+
+    asyncio.run(handler.list_applications(update, context))
+
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_only
 
 
 def test_status_without_history() -> None:
