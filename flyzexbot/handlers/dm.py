@@ -81,12 +81,6 @@ class DMHandlers:
 
         texts = self._get_texts(context, getattr(user, "language_code", None))
         await self.analytics.record("dm.apply_requested")
-        if self.storage.is_admin(user.id):
-            await query.edit_message_text(
-                text=texts.dm_admin_only,
-            )
-            return
-
         if self.storage.has_application(user.id):
             await query.edit_message_text(texts.dm_application_duplicate)
             return
