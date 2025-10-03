@@ -38,6 +38,7 @@ class DMHandlers:
             CommandHandler("cancel", self.cancel, filters=private_filter),
             MessageHandler(private_filter & filters.TEXT & ~filters.COMMAND, self.receive_application),
             CallbackQueryHandler(self.handle_apply_callback, pattern="^apply_for_guild$"),
+            CallbackQueryHandler(self.show_admin_panel, pattern="^admin_panel$"),
             CallbackQueryHandler(self.show_status_callback, pattern="^application_status$"),
             CallbackQueryHandler(self.handle_withdraw_callback, pattern="^application_withdraw$"),
             CallbackQueryHandler(self.show_language_menu, pattern="^language_menu$"),
@@ -59,11 +60,16 @@ class DMHandlers:
             return
         language_code = getattr(user, "language_code", None) if user else None
         texts = self._get_texts(context, language_code)
+        is_admin = self._is_admin(user.id) if user else False
         await self.analytics.record("dm.start")
         try:
             await chat.send_message(
                 text=self._build_welcome_text(texts),
-                reply_markup=glass_dm_welcome_keyboard(texts, self._get_webapp_url(context)),
+                reply_markup=glass_dm_welcome_keyboard(
+                    texts,
+                    self._get_webapp_url(context),
+                    is_admin=is_admin,
+                ),
                 parse_mode=ParseMode.HTML,
             )
         except Exception as exc:
@@ -91,6 +97,34 @@ class DMHandlers:
         )
         await query.message.chat.send_message(texts.dm_application_question)
         return
+
+    async def show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+
+        user = query.from_user
+        message = query.message
+        if user is None or message is None:
+            return
+
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        if not self._is_admin(user.id):
+            await query.answer(texts.dm_admin_only, show_alert=True)
+            return
+
+        await query.answer()
+        await query.edit_message_text(
+            text=texts.dm_admin_panel_intro,
+            reply_markup=glass_dm_welcome_keyboard(
+                texts,
+                self._get_webapp_url(context),
+                is_admin=True,
+            ),
+            parse_mode=ParseMode.HTML,
+        )
+        await self._send_pending_applications(message.chat, texts)
+        await self.analytics.record("dm.admin_panel_opened")
 
     async def receive_application(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pending_note = context.user_data.get("pending_review_note") if isinstance(context.user_data, dict) else None
@@ -160,23 +194,10 @@ class DMHandlers:
         if user is None or chat is None:
             return
         texts = self._get_texts(context, getattr(user, "language_code", None))
-        if not self.storage.is_admin(user.id):
+        if not self._is_admin(user.id):
             await chat.send_message(texts.dm_admin_only)
             return
-
-        pending = self.storage.get_pending_applications()
-        if not pending:
-            await chat.send_message(texts.dm_no_pending)
-            return
-
-        await self.analytics.record("dm.admin_pending_list")
-
-        for application in pending[:5]:
-            await chat.send_message(
-                text=self._render_application_text(application.user_id, texts),
-                parse_mode=ParseMode.HTML,
-                reply_markup=application_review_keyboard(application.user_id, texts),
-            )
+        await self._send_pending_applications(chat, texts)
 
     async def handle_application_action(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -189,7 +210,7 @@ class DMHandlers:
         admin_texts = self._get_texts(context, language_code)
         if user is None:
             return
-        if not self.storage.is_admin(user.id):
+        if not self._is_admin(user.id):
             await query.edit_message_text(admin_texts.dm_admin_only)
             return
 
@@ -473,9 +494,14 @@ class DMHandlers:
         if message is None:
             return
         texts = self._get_texts(context, getattr(user, "language_code", None) if user else None)
+        is_admin = self._is_admin(user.id) if user else False
         await message.edit_text(
             text=self._build_welcome_text(texts),
-            reply_markup=glass_dm_welcome_keyboard(texts, self._get_webapp_url(context)),
+            reply_markup=glass_dm_welcome_keyboard(
+                texts,
+                self._get_webapp_url(context),
+                is_admin=is_admin,
+            ),
             parse_mode=ParseMode.HTML,
         )
         await self.analytics.record("dm.language_menu_closed")
@@ -493,20 +519,48 @@ class DMHandlers:
         normalised = normalize_language_code(code) or code
         if isinstance(context.user_data, dict):
             context.user_data["preferred_language"] = normalised
+        user = query.from_user
         new_texts = get_text_pack(normalised)
         await self.analytics.record("dm.language_updated")
         await query.answer(new_texts.dm_language_updated, show_alert=True)
         message = query.message
         if message is None:
             return
+        is_admin = self._is_admin(user.id) if user else False
         await message.edit_text(
             text=self._build_welcome_text(new_texts),
-            reply_markup=glass_dm_welcome_keyboard(new_texts, self._get_webapp_url(context)),
+            reply_markup=glass_dm_welcome_keyboard(
+                new_texts,
+                self._get_webapp_url(context),
+                is_admin=is_admin,
+            ),
             parse_mode=ParseMode.HTML,
         )
 
     def _build_welcome_text(self, texts: TextPack) -> str:
         return f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}"
+
+    async def _send_pending_applications(self, chat, texts: TextPack) -> bool:
+        pending = self.storage.get_pending_applications()
+        if not pending:
+            await chat.send_message(texts.dm_no_pending)
+            return False
+
+        await self.analytics.record("dm.admin_pending_list")
+
+        for application in pending[:5]:
+            await chat.send_message(
+                text=self._format_application_entry(application, texts),
+                parse_mode=ParseMode.HTML,
+                reply_markup=application_review_keyboard(application.user_id, texts),
+            )
+        return True
+
+    def _is_admin(self, user_id: int) -> bool:
+        checker = getattr(self.storage, "is_admin", None)
+        if callable(checker):
+            return bool(checker(user_id))
+        return False
 
     def _get_webapp_url(self, context: ContextTypes.DEFAULT_TYPE) -> str | None:
         bot_data = getattr(context, "bot_data", None)

@@ -114,6 +114,18 @@ def test_glass_dm_welcome_keyboard_includes_webapp_button_when_configured() -> N
     assert any(getattr(button, "web_app", None) and button.web_app.url == url for button in buttons)
 
 
+def test_glass_dm_welcome_keyboard_includes_admin_button_for_admins() -> None:
+    markup = glass_dm_welcome_keyboard(PERSIAN_TEXTS, is_admin=True)
+    buttons = _flatten_keyboard(markup)
+    assert any(getattr(button, "callback_data", "") == "admin_panel" for button in buttons)
+
+
+def test_glass_dm_welcome_keyboard_hides_admin_button_for_regular_users() -> None:
+    markup = glass_dm_welcome_keyboard(PERSIAN_TEXTS)
+    buttons = _flatten_keyboard(markup)
+    assert all(getattr(button, "callback_data", "") != "admin_panel" for button in buttons)
+
+
 def test_start_message_includes_webapp_button_metadata() -> None:
     handler = DMHandlers(storage=SimpleNamespace(), owner_id=1)
     chat = DummyChat()
@@ -128,6 +140,34 @@ def test_start_message_includes_webapp_button_metadata() -> None:
     markup = chat.messages[-1].get("reply_markup")
     buttons = _flatten_keyboard(markup)
     assert any(getattr(button, "web_app", None) and button.web_app.url == url for button in buttons)
+
+
+def test_start_message_includes_admin_button_for_admin() -> None:
+    storage = SimpleNamespace(is_admin=lambda _: True)
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(2), effective_chat=chat)
+    context = DummyContext([])
+
+    asyncio.run(handler.start(update, context))
+
+    assert chat.messages
+    buttons = _flatten_keyboard(chat.messages[-1]["reply_markup"])
+    assert any(getattr(button, "callback_data", "") == "admin_panel" for button in buttons)
+
+
+def test_start_message_hides_admin_button_for_non_admin() -> None:
+    storage = SimpleNamespace(is_admin=lambda _: False)
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(3), effective_chat=chat)
+    context = DummyContext([])
+
+    asyncio.run(handler.start(update, context))
+
+    assert chat.messages
+    buttons = _flatten_keyboard(chat.messages[-1]["reply_markup"])
+    assert all(getattr(button, "callback_data", "") != "admin_panel" for button in buttons)
 
 
 def test_promote_admin_invalid_identifier() -> None:
@@ -205,6 +245,48 @@ def test_list_applications_requires_admin_privileges() -> None:
     asyncio.run(handler.list_applications(update, context))
 
     assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_only
+
+
+def test_show_admin_panel_requires_admin_privileges() -> None:
+    storage = SimpleNamespace(is_admin=lambda _: False, get_pending_applications=lambda: [])
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(50)
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.show_admin_panel(update, context))
+
+    query.answer.assert_awaited_once_with(PERSIAN_TEXTS.dm_admin_only, show_alert=True)
+
+
+def test_show_admin_panel_lists_pending_for_admin() -> None:
+    pending_applications = [
+        Application(
+            user_id=101,
+            full_name="Tester",
+            answer="Ready to contribute",
+            created_at="2024-06-01T12:00:00",
+            language_code="fa",
+        )
+    ]
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        get_pending_applications=lambda: pending_applications,
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(51)
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.show_admin_panel(update, context))
+
+    query.edit_message_text.assert_awaited()
+    assert chat.messages
+    assert any("Tester" in message["text"] for message in chat.messages)
 
 
 def test_status_without_history() -> None:
