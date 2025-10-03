@@ -12,7 +12,8 @@ from ..localization import (PERSIAN_TEXTS, TextPack, get_text_pack,
 from ..services.analytics import AnalyticsTracker, NullAnalytics
 from ..services.security import RateLimitGuard
 from ..services.storage import Application, ApplicationHistoryEntry, Storage
-from ..ui.keyboards import (application_review_keyboard,
+from ..ui.keyboards import (admin_panel_keyboard,
+                            application_review_keyboard,
                             glass_dm_welcome_keyboard,
                             language_options_keyboard)
 
@@ -39,6 +40,7 @@ class DMHandlers:
             MessageHandler(private_filter & filters.TEXT & ~filters.COMMAND, self.receive_application),
             CallbackQueryHandler(self.handle_apply_callback, pattern="^apply_for_guild$"),
             CallbackQueryHandler(self.show_admin_panel, pattern="^admin_panel$"),
+            CallbackQueryHandler(self.handle_admin_panel_action, pattern=r"^admin_panel:"),
             CallbackQueryHandler(self.show_status_callback, pattern="^application_status$"),
             CallbackQueryHandler(self.handle_withdraw_callback, pattern="^application_withdraw$"),
             CallbackQueryHandler(self.show_language_menu, pattern="^language_menu$"),
@@ -115,21 +117,108 @@ class DMHandlers:
 
         await query.answer()
         await query.edit_message_text(
-            text=texts.dm_admin_panel_intro,
-            reply_markup=glass_dm_welcome_keyboard(
+            text=self._build_admin_panel_text(texts),
+            reply_markup=admin_panel_keyboard(
                 texts,
                 self._get_webapp_url(context),
-                is_admin=True,
             ),
             parse_mode=ParseMode.HTML,
         )
-        await self._send_pending_applications(message.chat, texts)
         await self.analytics.record("dm.admin_panel_opened")
+
+    async def handle_admin_panel_action(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+
+        data = query.data or ""
+        parts = data.split(":", 1)
+        if len(parts) != 2:
+            await query.answer()
+            return
+
+        _, action = parts
+        user = query.from_user
+        message = query.message
+        if user is None or message is None:
+            await query.answer()
+            return
+
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        if not self._is_admin(user.id):
+            await query.answer(texts.dm_admin_only, show_alert=True)
+            return
+
+        chat = message.chat
+
+        if action == "view_applications":
+            await query.answer()
+            if chat is not None:
+                await self._send_pending_applications(chat, texts)
+            await self.analytics.record("dm.admin_panel_view_applications")
+            return
+
+        if action == "view_members":
+            await query.answer()
+            if chat is not None:
+                members_text = self._render_members_list(
+                    self.storage.get_applicants_by_status("approved"),
+                    texts,
+                )
+                await chat.send_message(members_text, parse_mode=ParseMode.HTML)
+            await self.analytics.record("dm.admin_panel_view_members")
+            return
+
+        if action == "add_admin":
+            if user.id != self.owner_id:
+                await query.answer(texts.dm_not_owner, show_alert=True)
+                return
+            await query.answer()
+            if isinstance(context.user_data, dict):
+                context.user_data["pending_admin_action"] = "promote"
+            if chat is not None:
+                await chat.send_message(texts.dm_admin_panel_add_admin_prompt)
+            await self.analytics.record("dm.admin_panel_add_admin")
+            return
+
+        if action == "more_tools":
+            await query.answer()
+            if chat is not None:
+                webapp_url = self._get_webapp_url(context)
+                if webapp_url:
+                    await chat.send_message(
+                        texts.dm_admin_panel_more_tools_text.format(webapp_url=webapp_url),
+                        parse_mode=ParseMode.HTML,
+                    )
+                else:
+                    await chat.send_message(texts.dm_admin_panel_more_tools_no_webapp)
+            await self.analytics.record("dm.admin_panel_more_tools")
+            return
+
+        if action == "back":
+            await query.answer()
+            await query.edit_message_text(
+                text=self._build_welcome_text(texts),
+                reply_markup=glass_dm_welcome_keyboard(
+                    texts,
+                    self._get_webapp_url(context),
+                    is_admin=True,
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+            await self.analytics.record("dm.admin_panel_back")
+            return
+
+        await query.answer()
 
     async def receive_application(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pending_note = context.user_data.get("pending_review_note") if isinstance(context.user_data, dict) else None
         if pending_note:
             await self._process_admin_note_response(update, context)
+            return
+
+        if isinstance(context.user_data, dict) and context.user_data.get("pending_admin_action") == "promote":
+            await self._process_admin_promote_response(update, context)
             return
 
         if not context.user_data.get("is_filling_application"):
@@ -182,6 +271,7 @@ class DMHandlers:
 
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop("is_filling_application", None)
+        context.user_data.pop("pending_admin_action", None)
         language_code = getattr(update.effective_user, "language_code", None)
         texts = self._get_texts(context, language_code)
         if update.message:
@@ -329,6 +419,34 @@ class DMHandlers:
             await self.analytics.record(analytics_event)
         finally:
             context.user_data.pop("pending_review_note", None)
+
+    async def _process_admin_promote_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        message = update.message
+        user = update.effective_user
+        chat = update.effective_chat
+        if message is None or user is None or chat is None:
+            return
+
+        if user.id != self.owner_id:
+            context.user_data.pop("pending_admin_action", None)
+            return
+
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        payload = (message.text or "").strip()
+        try:
+            target_user_id = int(payload)
+        except (TypeError, ValueError):
+            await message.reply_text(texts.dm_admin_invalid_user_id)
+            return
+
+        added = await self.storage.add_admin(target_user_id)
+        if added:
+            await chat.send_message(texts.dm_admin_added.format(user_id=target_user_id))
+        else:
+            await chat.send_message(texts.dm_already_admin.format(user_id=target_user_id))
+
+        context.user_data.pop("pending_admin_action", None)
+        await self.analytics.record("dm.admin_panel_promote_completed")
 
 
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
@@ -539,6 +657,27 @@ class DMHandlers:
 
     def _build_welcome_text(self, texts: TextPack) -> str:
         return f"{texts.dm_welcome}\n\n{texts.glass_panel_caption}"
+
+    def _build_admin_panel_text(self, texts: TextPack) -> str:
+        return f"{texts.dm_admin_panel_intro}\n\n{texts.glass_panel_caption}"
+
+    def _render_members_list(
+        self,
+        entries: list[tuple[int, ApplicationHistoryEntry]],
+        texts: TextPack,
+    ) -> str:
+        if not entries:
+            return texts.dm_admin_panel_members_empty
+
+        lines = []
+        for user_id, history in entries[:10]:
+            updated_at = escape(getattr(history, "updated_at", ""))
+            lines.append(f"• <code>{user_id}</code> – {updated_at}")
+        members_block = "\n".join(lines)
+        return texts.dm_admin_panel_members_header.format(
+            count=len(entries),
+            members=members_block,
+        )
 
     async def _send_pending_applications(self, chat, texts: TextPack) -> bool:
         pending = self.storage.get_pending_applications()

@@ -67,6 +67,16 @@ class TextPack:
     dm_language_updated: str
     group_refresh_button: str
     dm_admin_panel_intro: str
+    dm_admin_panel_view_applications_button: str
+    dm_admin_panel_view_members_button: str
+    dm_admin_panel_add_admin_button: str
+    dm_admin_panel_more_tools_button: str
+    dm_admin_panel_back_button: str
+    dm_admin_panel_members_header: str
+    dm_admin_panel_members_empty: str
+    dm_admin_panel_add_admin_prompt: str
+    dm_admin_panel_more_tools_text: str
+    dm_admin_panel_more_tools_no_webapp: str
 
 
 PERSIAN_TEXTS = TextPack(
@@ -165,7 +175,25 @@ PERSIAN_TEXTS = TextPack(
     group_refresh_button="🔄 تازه‌سازی",
     dm_admin_panel_intro=(
         "<b>🛡️ پنل مدیریت فلیزکس</b>\n"
-        "آخرین درخواست‌های در انتظار بررسی در زیر نمایش داده می‌شوند."
+        "برای ادامه یکی از گزینه‌های شیشه‌ای زیر را انتخاب کنید."
+    ),
+    dm_admin_panel_view_applications_button="مشاهده درخواست‌ها",
+    dm_admin_panel_view_members_button="اعضای تایید‌شده",
+    dm_admin_panel_add_admin_button="افزودن ادمین جدید",
+    dm_admin_panel_more_tools_button="ابزارهای بیشتر",
+    dm_admin_panel_back_button="بازگشت به خانه",
+    dm_admin_panel_members_header="✅ اعضای تایید‌شده ({count} نفر):\n{members}",
+    dm_admin_panel_members_empty="هنوز هیچ عضوی تایید نشده است.",
+    dm_admin_panel_add_admin_prompt=(
+        "برای افزودن ادمین جدید، شناسه عددی او را ارسال کنید."
+        "\nدر صورت انصراف، دستور /cancel را ارسال کنید."
+    ),
+    dm_admin_panel_more_tools_text=(
+        "✨ برای مدیریت پیشرفته می‌توانید از پنل وب یا دستورات /pending و /admins استفاده کنید."
+        "\n🌐 لینک پنل وب: {webapp_url}"
+    ),
+    dm_admin_panel_more_tools_no_webapp=(
+        "✨ برای مدیریت پیشرفته از دستورات /pending و /admins استفاده کنید."
     ),
 )
 
@@ -266,7 +294,25 @@ ENGLISH_TEXTS = TextPack(
     group_refresh_button="🔄 Refresh",
     dm_admin_panel_intro=(
         "<b>🛡️ Flyzex admin panel</b>\n"
-        "Pending applications appear below for quick review."
+        "Choose one of the glassy options below to continue."
+    ),
+    dm_admin_panel_view_applications_button="View applications",
+    dm_admin_panel_view_members_button="Approved members",
+    dm_admin_panel_add_admin_button="Add new admin",
+    dm_admin_panel_more_tools_button="More tools",
+    dm_admin_panel_back_button="Back to home",
+    dm_admin_panel_members_header="✅ Approved members ({count}):\n{members}",
+    dm_admin_panel_members_empty="No members have been approved yet.",
+    dm_admin_panel_add_admin_prompt=(
+        "Send the numeric user ID you want to promote as an admin."
+        "\nSend /cancel if you changed your mind."
+    ),
+    dm_admin_panel_more_tools_text=(
+        "✨ For advanced management, open the web panel or use /pending and /admins."
+        "\n🌐 Web panel link: {webapp_url}"
+    ),
+    dm_admin_panel_more_tools_no_webapp=(
+        "✨ Use /pending and /admins for advanced management options."
     ),
 )
 

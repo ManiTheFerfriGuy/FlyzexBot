@@ -62,6 +62,60 @@ def glass_dm_welcome_keyboard(
     return InlineKeyboardMarkup(rows)
 
 
+def admin_panel_keyboard(
+    texts: TextPack | None = None,
+    webapp_url: str | None = None,
+) -> InlineKeyboardMarkup:
+    text_pack = texts or PERSIAN_TEXTS
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=f"📬 {text_pack.dm_admin_panel_view_applications_button}",
+                callback_data="admin_panel:view_applications",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"✅ {text_pack.dm_admin_panel_view_members_button}",
+                callback_data="admin_panel:view_members",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"➕ {text_pack.dm_admin_panel_add_admin_button}",
+                callback_data="admin_panel:add_admin",
+            )
+        ],
+    ]
+    if webapp_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🌐 {text_pack.dm_admin_panel_more_tools_button}",
+                    web_app=WebAppInfo(url=webapp_url),
+                )
+            ]
+        )
+    else:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"✨ {text_pack.dm_admin_panel_more_tools_button}",
+                    callback_data="admin_panel:more_tools",
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=f"⬅️ {text_pack.dm_admin_panel_back_button}",
+                callback_data="admin_panel:back",
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
 def application_review_keyboard(user_id: int, texts: TextPack | None = None) -> InlineKeyboardMarkup:
     text_pack = texts or PERSIAN_TEXTS
     return InlineKeyboardMarkup(
