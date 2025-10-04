@@ -542,7 +542,7 @@ def test_admin_handles_skip_for_denial() -> None:
 
     asyncio.run(handler.handle_application_action(update, context))
 
-    note_message = DummyIncomingMessage("SkIp")
+    note_message = DummyIncomingMessage("  صرفنظر  ")
     update_note = SimpleNamespace(message=note_message, effective_user=admin_user)
 
     asyncio.run(handler.receive_application(update_note, context))

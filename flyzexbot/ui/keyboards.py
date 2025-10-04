@@ -5,7 +5,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from ..localization import PERSIAN_TEXTS, TextPack
 
 
-LANGUAGE_OPTIONS: list[tuple[str, str]] = [("fa", "فارسی"), ("en", "English")]
+LANGUAGE_CODES: tuple[str, ...] = ("fa", "en")
+DEFAULT_LANGUAGE_LABELS: dict[str, str] = {"fa": "فارسی", "en": "English"}
 
 
 def glass_dm_welcome_keyboard(
@@ -143,7 +144,9 @@ def application_review_keyboard(user_id: int, texts: TextPack | None = None) -> 
 def language_options_keyboard(active: str | None, texts: TextPack | None = None) -> InlineKeyboardMarkup:
     text_pack = texts or PERSIAN_TEXTS
     rows: list[list[InlineKeyboardButton]] = []
-    for code, label in LANGUAGE_OPTIONS:
+    for code in LANGUAGE_CODES:
+        language_names = getattr(text_pack, "language_names", {})
+        label = language_names.get(code, DEFAULT_LANGUAGE_LABELS.get(code, code))
         prefix = "✅ " if code == active else ""
         rows.append(
             [
