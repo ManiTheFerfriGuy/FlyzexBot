@@ -14,11 +14,54 @@
         می‌توانید این صفحه را در یک WebApp تلگرام یا وب‌سایت جانبی میزبانی کنید.
       </p>
       <div class="button-grid">
-        <button type="button">درخواست عضویت</button>
-        <button type="button">بررسی درخواست‌ها</button>
-        <button type="button">نمایش لیدربورد XP</button>
-        <button type="button">نمایش جام‌ها</button>
+        <button type="button" data-view="overview" class="active">درخواست عضویت</button>
+        <button type="button" data-view="pending">بررسی درخواست‌ها</button>
+        <button type="button" data-view="xp">نمایش لیدربورد XP</button>
+        <button type="button" data-view="cups">نمایش جام‌ها</button>
+      </div>
+      <div id="view-container">
+        <section id="view-overview" class="view active">
+          <h2>چطور درخواست عضویت ثبت کنیم؟</h2>
+          <p>
+            کافی است در تلگرام دستور <code>/start</code> را برای ربات ارسال کنید تا فرم درخواست باز شود.
+            پس از ثبت درخواست، تیم مدیریت می‌تواند در همین پنل وضعیت آن را مشاهده و بررسی کند.
+          </p>
+        </section>
+        <section id="view-pending" class="view">
+          <h2>درخواست‌های در انتظار بررسی</h2>
+          <p id="pending-status" class="status">برای مشاهده داده‌ها روی دکمه بالا کلیک کنید.</p>
+          <ul id="pending-list" class="data-list" aria-live="polite"></ul>
+        </section>
+        <section id="view-xp" class="view">
+          <h2>لیدربورد تجربه (XP)</h2>
+          <form id="xp-form" class="inline-form">
+            <label for="xp-chat-id">شناسه چت (Chat ID)
+              <input id="xp-chat-id" name="chat_id" type="number" inputmode="numeric" required />
+            </label>
+            <label for="xp-limit">حداکثر تعداد افراد
+              <input id="xp-limit" name="limit" type="number" min="1" placeholder="پیش‌فرض پیکربندی" />
+            </label>
+            <button type="submit">بارگذاری لیدربورد</button>
+          </form>
+          <p id="xp-status" class="status">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
+          <ol id="xp-list" class="data-list" aria-live="polite"></ol>
+        </section>
+        <section id="view-cups" class="view">
+          <h2>آرشیو جام‌ها</h2>
+          <form id="cups-form" class="inline-form">
+            <label for="cups-chat-id">شناسه چت (Chat ID)
+              <input id="cups-chat-id" name="chat_id" type="number" inputmode="numeric" required />
+            </label>
+            <label for="cups-limit">حداکثر تعداد جام‌ها
+              <input id="cups-limit" name="limit" type="number" min="1" placeholder="پیش‌فرض پیکربندی" />
+            </label>
+            <button type="submit">نمایش جام‌ها</button>
+          </form>
+          <p id="cups-status" class="status">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
+          <div id="cups-list" aria-live="polite"></div>
+        </section>
       </div>
     </section>
+    <script src="static/app.js" type="module"></script>
   </body>
 </html>
