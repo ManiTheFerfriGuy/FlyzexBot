@@ -49,9 +49,95 @@ body {
   backdrop-filter: blur(30px);
 }
 
+.button-grid button.active {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
 .button-grid button:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.view {
+  display: none;
+  margin-top: 2rem;
+}
+
+.view.active {
+  display: block;
+}
+
+.view h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.status {
+  margin: 1rem 0 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+}
+
+.data-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.data-list li,
+.cup-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 0.9rem 1rem;
+}
+
+.item-title {
+  font-weight: 700;
+  display: block;
+}
+
+.item-meta {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.inline-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.inline-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.inline-form input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.inline-form button {
+  justify-self: start;
+  padding: 0.7rem 1.2rem;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(125, 211, 252, 0.6), rgba(59, 130, 246, 0.6));
+  color: #fff;
+}
+
+.podium-list {
+  list-style: decimal;
+  margin: 0.75rem 0 0;
+  padding-inline-start: 1.25rem;
 }
 
 @media (max-width: 600px) {

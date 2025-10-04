@@ -22,7 +22,7 @@ class DummyMessage:
         self.text = text
         self.replies: list[str] = []
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text: str, **_: object) -> None:  # noqa: ANN003 - kwargs unused
         self.replies.append(text)
 
 
@@ -112,3 +112,33 @@ def test_track_activity_skips_non_milestones_with_custom_interval() -> None:
     asyncio.run(handler.track_activity(update, context))
 
     assert not message.replies, "Milestone message should not be sent for non-matching scores"
+
+
+def test_track_activity_handles_zero_reward() -> None:
+    storage = SimpleNamespace(add_xp=AsyncMock(return_value=0))
+    handler = GroupHandlers(
+        storage=storage,
+        xp_reward=0,
+        xp_limit=100,
+        cups_limit=10,
+    )
+
+    message = DummyMessage()
+    chat = SimpleNamespace(id=789)
+    user = SimpleNamespace(id=321, full_name="Tester", username="tester")
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_chat=chat,
+        effective_user=user,
+    )
+    context = DummyContext([])
+
+    asyncio.run(handler.track_activity(update, context))
+
+    storage.add_xp.assert_awaited_once()
+    assert storage.add_xp.await_args.kwargs == {
+        "chat_id": chat.id,
+        "user_id": user.id,
+        "amount": 0,
+    }
+    assert message.replies == []

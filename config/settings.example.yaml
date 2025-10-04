@@ -5,7 +5,7 @@ telegram:
   owner_id: 123456789  # شناسه مدیر اصلی بات
   application_review_chat: null  # در صورت نیاز می‌توانید شناسه چت خاصی برای اعلان درخواست‌ها تعیین کنید
 xp:
-  message_reward: 5
+  message_reward: 5  # در صورت تنظیم مقدار 0، سیستم XP در گروه غیرفعال می‌شود
   leaderboard_size: 10
   milestone_interval: 5
 cups:
