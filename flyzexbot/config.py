@@ -20,6 +20,7 @@ class TelegramConfig:
 class XPConfig:
     message_reward: int
     leaderboard_size: int
+    milestone_interval: int = 5
 
 
 @dataclass
@@ -97,6 +98,7 @@ class Settings:
         xp = XPConfig(
             message_reward=int(data["xp"]["message_reward"]),
             leaderboard_size=int(data["xp"]["leaderboard_size"]),
+            milestone_interval=int(data["xp"].get("milestone_interval", 5)),
         )
 
         cups = CupConfig(
