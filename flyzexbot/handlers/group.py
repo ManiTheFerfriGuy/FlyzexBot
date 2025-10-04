@@ -59,6 +59,9 @@ class GroupHandlers:
             LOGGER.error("Failed to update XP for %s: %s", update.effective_user.id, exc)
             await self.analytics.record("group.activity_error")
             return
+        if self.xp_reward <= 0:
+            await self.analytics.record("group.activity_tracked")
+            return
         if new_score % (self.xp_reward * 5) == 0:
             await message.reply_text(
                 texts.group_xp_updated.format(
