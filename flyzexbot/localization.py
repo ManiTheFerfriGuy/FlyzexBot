@@ -77,6 +77,7 @@ class TextPack:
     dm_admin_panel_add_admin_prompt: str
     dm_admin_panel_more_tools_text: str
     dm_admin_panel_more_tools_no_webapp: str
+    language_names: Dict[str, str]
 
 
 PERSIAN_TEXTS = TextPack(
@@ -124,8 +125,8 @@ PERSIAN_TEXTS = TextPack(
         "approve": "✅ درخواست کاربر تأیید و پیام ارسال شد.",
         "deny": "❌ درخواست کاربر رد و پیام ارسال شد.",
     },
-    dm_application_note_skip_hint="برای ادامه بدون توضیح، عبارت SKIP را ارسال کنید.",
-    dm_application_note_skip_keyword="skip",
+    dm_application_note_skip_hint="برای ادامه بدون توضیح، عبارت «صرفنظر» را ارسال کنید.",
+    dm_application_note_skip_keyword="صرفنظر",
     dm_application_note_label="یادداشت",
     dm_application_note_no_active="ℹ️ موردی برای ثبت یادداشت وجود ندارد.",
     dm_status_none="ℹ️ هنوز درخواستی ثبت نکرده‌اید.",
@@ -195,6 +196,10 @@ PERSIAN_TEXTS = TextPack(
     dm_admin_panel_more_tools_no_webapp=(
         "✨ برای مدیریت پیشرفته از دستورات /pending و /admins استفاده کنید."
     ),
+    language_names={
+        "fa": "فارسی",
+        "en": "انگلیسی",
+    },
 )
 
 
@@ -314,6 +319,10 @@ ENGLISH_TEXTS = TextPack(
     dm_admin_panel_more_tools_no_webapp=(
         "✨ Use /pending and /admins for advanced management options."
     ),
+    language_names={
+        "fa": "Persian",
+        "en": "English",
+    },
 )
 
 
