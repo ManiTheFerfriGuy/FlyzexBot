@@ -45,6 +45,8 @@ class GroupHandlers:
         message = update.effective_message
         if message is None or update.effective_chat is None or update.effective_user is None:
             return
+        if getattr(update.effective_user, "is_bot", False):
+            return
         if message.text and message.text.startswith("/"):
             return
         texts = self._get_texts(context, getattr(update.effective_user, "language_code", None))

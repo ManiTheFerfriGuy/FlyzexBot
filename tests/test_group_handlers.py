@@ -17,6 +17,15 @@ class DummyChat:
         self.messages.append(text)
 
 
+class DummyMessage:
+    def __init__(self, text: str = "سلام") -> None:
+        self.text = text
+        self.replies: list[str] = []
+
+    async def reply_text(self, text: str, **_: object) -> None:  # noqa: ANN003 - kwargs unused
+        self.replies.append(text)
+
+
 class DummyUser:
     def __init__(self, user_id: int = 456, language_code: str = "fa") -> None:
         self.id = user_id
@@ -48,3 +57,32 @@ def test_add_cup_accepts_single_argument_string() -> None:
 
     storage.add_cup.assert_awaited_once_with(chat.id, "Title", "Description", ["A", "B", "C"])
     assert PERSIAN_TEXTS.group_add_cup_usage not in chat.messages
+
+
+def test_track_activity_ignores_bot_user() -> None:
+    storage = SimpleNamespace(add_xp=AsyncMock())
+    handler = GroupHandlers(
+        storage=storage,
+        xp_reward=10,
+        xp_limit=100,
+        cups_limit=10,
+    )
+
+    message = DummyMessage("hello")
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_chat=SimpleNamespace(id=999),
+        effective_user=SimpleNamespace(
+            id=111,
+            is_bot=True,
+            full_name="Helper Bot",
+            username="helper_bot",
+            language_code="fa",
+        ),
+    )
+    context = DummyContext([])
+
+    asyncio.run(handler.track_activity(update, context))
+
+    storage.add_xp.assert_not_awaited()
+    assert message.replies == []
