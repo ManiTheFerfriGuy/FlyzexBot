@@ -5,3 +5,5 @@ apscheduler>=3.10
 uvloop>=0.17; sys_platform != 'win32'
 aiofiles>=23.1
 pytest>=7.4
+fastapi>=0.110
+uvicorn>=0.23
