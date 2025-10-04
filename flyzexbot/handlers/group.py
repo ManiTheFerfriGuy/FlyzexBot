@@ -24,12 +24,14 @@ class GroupHandlers:
         xp_reward: int,
         xp_limit: int,
         cups_limit: int,
+        milestone_interval: int = 5,
         analytics: AnalyticsTracker | NullAnalytics | None = None,
     ) -> None:
         self.storage = storage
         self.xp_reward = xp_reward
         self.xp_limit = xp_limit
         self.cups_limit = cups_limit
+        self.milestone_interval = milestone_interval
         self.analytics = analytics or NullAnalytics()
 
     def build_handlers(self) -> list:

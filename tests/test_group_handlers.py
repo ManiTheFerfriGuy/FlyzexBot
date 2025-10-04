@@ -30,6 +30,8 @@ class DummyUser:
     def __init__(self, user_id: int = 456, language_code: str = "fa") -> None:
         self.id = user_id
         self.language_code = language_code
+        self.full_name = "Test User"
+        self.username = "test_user"
 
 
 class DummyContext:

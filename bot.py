@@ -58,6 +58,7 @@ async def build_application(settings: Settings) -> None:
         xp_reward=settings.xp.message_reward,
         xp_limit=settings.xp.leaderboard_size,
         cups_limit=settings.cups.leaderboard_size,
+        milestone_interval=settings.xp.milestone_interval,
         analytics=analytics,
     )
 
