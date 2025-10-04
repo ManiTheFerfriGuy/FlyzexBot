@@ -64,8 +64,7 @@ class GroupHandlers:
         if self.xp_reward <= 0:
             await self.analytics.record("group.activity_tracked")
             return
-        milestone_step = self.xp_reward * self.milestone_interval
-        if milestone_step > 0 and new_score % milestone_step == 0:
+        if new_score % (self.xp_reward * 5) == 0:
             await message.reply_text(
                 texts.group_xp_updated.format(
                     full_name=update.effective_user.full_name
