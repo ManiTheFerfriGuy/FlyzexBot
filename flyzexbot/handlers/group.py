@@ -24,12 +24,14 @@ class GroupHandlers:
         xp_reward: int,
         xp_limit: int,
         cups_limit: int,
+        milestone_interval: int = 5,
         analytics: AnalyticsTracker | NullAnalytics | None = None,
     ) -> None:
         self.storage = storage
         self.xp_reward = xp_reward
         self.xp_limit = xp_limit
         self.cups_limit = cups_limit
+        self.milestone_interval = milestone_interval
         self.analytics = analytics or NullAnalytics()
 
     def build_handlers(self) -> list:
@@ -59,7 +61,8 @@ class GroupHandlers:
             LOGGER.error("Failed to update XP for %s: %s", update.effective_user.id, exc)
             await self.analytics.record("group.activity_error")
             return
-        if new_score % (self.xp_reward * 5) == 0:
+        milestone_step = self.xp_reward * self.milestone_interval
+        if milestone_step > 0 and new_score % milestone_step == 0:
             await message.reply_text(
                 texts.group_xp_updated.format(
                     full_name=update.effective_user.full_name
