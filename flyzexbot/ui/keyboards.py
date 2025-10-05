@@ -89,6 +89,12 @@ def admin_panel_keyboard(
         ],
         [
             InlineKeyboardButton(
+                text=f"🛠️ {text_pack.dm_admin_panel_manage_questions_button}",
+                callback_data="admin_panel:manage_questions",
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text=f"📊 {text_pack.dm_admin_panel_insights_button}",
                 callback_data="admin_panel:insights",
             )
@@ -121,6 +127,66 @@ def admin_panel_keyboard(
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+def admin_questions_keyboard(
+    texts: TextPack | None = None,
+    *,
+    role_keys: tuple[str, ...] | None = None,
+) -> InlineKeyboardMarkup:
+    text_pack = texts or PERSIAN_TEXTS
+    buttons: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=text_pack.dm_admin_questions_role_label,
+                callback_data="admin_panel:manage_questions:role_prompt",
+            )
+        ],
+    ]
+
+    followup_template = getattr(
+        text_pack,
+        "dm_admin_questions_followup_label_template",
+        "{role}",
+    )
+    options = text_pack.dm_application_role_options
+    keys = role_keys or tuple(options.keys())
+    for key in keys:
+        labels = options.get(key, [])
+        role_label = labels[0] if labels else key
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=followup_template.format(role=role_label),
+                    callback_data=f"admin_panel:manage_questions:followup:{key}",
+                )
+            ]
+        )
+
+    buttons.extend(
+        [
+            [
+                InlineKeyboardButton(
+                    text=text_pack.dm_admin_questions_goals_label,
+                    callback_data="admin_panel:manage_questions:goals_prompt",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=text_pack.dm_admin_questions_availability_label,
+                    callback_data="admin_panel:manage_questions:availability_prompt",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=text_pack.dm_admin_questions_back_button,
+                    callback_data="admin_panel:manage_questions:back",
+                )
+            ],
+        ]
+    )
+
+    return InlineKeyboardMarkup(buttons)
 
 
 def admin_management_keyboard(texts: TextPack | None = None) -> InlineKeyboardMarkup:

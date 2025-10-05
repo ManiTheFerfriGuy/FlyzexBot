@@ -92,6 +92,7 @@ class StorageState:
     application_history: Dict[int, ApplicationHistoryEntry] = field(default_factory=dict)
     xp: Dict[str, Dict[str, int]] = field(default_factory=dict)
     cups: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    application_questions: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -116,6 +117,13 @@ class StorageState:
             },
             "xp": self.xp,
             "cups": self.cups,
+            "application_questions": {
+                str(language): {
+                    str(question_id): prompt
+                    for question_id, prompt in questions.items()
+                }
+                for language, questions in self.application_questions.items()
+            },
         }
 
     @classmethod
@@ -168,10 +176,23 @@ class StorageState:
                 ]
                 for k, v in payload.get("cups", {}).items()
             },
+            application_questions={
+                str(language): {
+                    str(question_id): str(prompt)
+                    for question_id, prompt in (questions or {}).items()
+                    if isinstance(question_id, str)
+                    and isinstance(prompt, str)
+                    and prompt.strip()
+                }
+                for language, questions in payload.get("application_questions", {}).items()
+                if isinstance(language, str)
+            },
         )
 
 
 class Storage:
+    _DEFAULT_LANGUAGE_KEY = "__default__"
+
     def __init__(
         self,
         path: Path,
@@ -288,6 +309,63 @@ class Storage:
                 }
             )
         return details
+
+    def _normalise_language_key(self, language_code: Optional[str]) -> str:
+        if language_code is None:
+            return self._DEFAULT_LANGUAGE_KEY
+        code = str(language_code).strip()
+        if not code:
+            return self._DEFAULT_LANGUAGE_KEY
+        return code.lower()
+
+    def get_application_questions(self, language_code: Optional[str] = None) -> Dict[str, str]:
+        language_key = self._normalise_language_key(language_code)
+        overrides: Dict[str, str] = {}
+        default_bucket = self._state.application_questions.get(
+            self._DEFAULT_LANGUAGE_KEY,
+            {},
+        )
+        if default_bucket:
+            overrides.update(default_bucket)
+        if language_key != self._DEFAULT_LANGUAGE_KEY:
+            overrides.update(
+                self._state.application_questions.get(language_key, {})
+            )
+        return dict(overrides)
+
+    async def set_application_question(
+        self,
+        question_id: str,
+        prompt: Optional[str],
+        *,
+        language_code: Optional[str] = None,
+    ) -> bool:
+        normalised_id = (question_id or "").strip()
+        if not normalised_id:
+            return False
+
+        trimmed_prompt = (prompt or "").strip()
+        language_key = self._normalise_language_key(language_code)
+
+        async with self._lock:
+            bucket = self._state.application_questions.setdefault(language_key, {})
+            if trimmed_prompt:
+                if bucket.get(normalised_id) == trimmed_prompt:
+                    return False
+                bucket[normalised_id] = trimmed_prompt
+            else:
+                if normalised_id not in bucket:
+                    return False
+                bucket.pop(normalised_id, None)
+                if not bucket:
+                    self._state.application_questions.pop(language_key, None)
+
+        await self.save()
+        LOGGER.info(
+            "application_question_updated",
+            extra={"question_id": normalised_id, "language": language_key},
+        )
+        return True
 
     async def add_application(
         self,
@@ -514,6 +592,7 @@ class Storage:
                 DROP TABLE IF EXISTS application_history;
                 DROP TABLE IF EXISTS xp;
                 DROP TABLE IF EXISTS cups;
+                DROP TABLE IF EXISTS application_questions;
                 DROP TABLE IF EXISTS metadata;
 
                 CREATE TABLE admins (
@@ -569,6 +648,13 @@ class Storage:
                     podium TEXT,
                     created_at TEXT,
                     PRIMARY KEY (chat_id, position)
+                );
+
+                CREATE TABLE application_questions (
+                    language_code TEXT,
+                    question_id TEXT,
+                    prompt TEXT,
+                    PRIMARY KEY (language_code, question_id)
                 );
 
                 CREATE TABLE metadata (
@@ -692,6 +778,20 @@ class Storage:
                     ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     cups_rows,
+                )
+
+            question_rows = [
+                (language, question_id, prompt)
+                for language, questions in snapshot.get("application_questions", {}).items()
+                for question_id, prompt in questions.items()
+            ]
+            if question_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO application_questions(language_code, question_id, prompt)
+                    VALUES (?, ?, ?)
+                    """,
+                    question_rows,
                 )
 
             cursor.execute(
