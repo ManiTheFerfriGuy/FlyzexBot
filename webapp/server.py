@@ -49,7 +49,11 @@ def _normalize_user_id(value: str) -> int | str:
 async def lifespan(app: FastAPI):
     settings = Settings.load(_resolve_config_path())
     encryption = EncryptionManager(settings.get_secret_key())
-    storage = Storage(settings.storage.path, encryption)
+    storage = Storage(
+        settings.storage.path,
+        encryption,
+        backup_path=settings.storage.backup_path,
+    )
     await storage.load()
 
     app.state.settings = settings

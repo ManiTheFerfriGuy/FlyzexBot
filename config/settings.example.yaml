@@ -12,6 +12,7 @@ cups:
   leaderboard_size: 5
 storage:
   path: data/storage.json.enc
+  backup_path: data/storage.sqlite
 logging:
   level: INFO
   file: logs/bot.log

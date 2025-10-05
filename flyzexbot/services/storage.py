@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+import sqlite3
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -171,11 +172,18 @@ class StorageState:
 
 
 class Storage:
-    def __init__(self, path: Path, encryption: EncryptionManager) -> None:
+    def __init__(
+        self,
+        path: Path,
+        encryption: EncryptionManager,
+        *,
+        backup_path: Optional[Path] = None,
+    ) -> None:
         self._path = path
         self._encryption = encryption
         self._lock = asyncio.Lock()
         self._state = StorageState()
+        self._backup_path = backup_path
 
     async def load(self) -> None:
         if not self._path.exists():
@@ -199,6 +207,13 @@ class Storage:
     async def save(self) -> None:
         payload = await self._snapshot()
         await self._write_snapshot(payload)
+        if self._backup_path:
+            try:
+                await self._write_sqlite_backup(payload)
+            except Exception:
+                LOGGER.exception(
+                    "sqlite_backup_failed", extra={"path": str(self._backup_path)}
+                )
 
     async def add_admin(
         self,
@@ -474,4 +489,217 @@ class Storage:
             raise
 
         LOGGER.debug("storage_flushed", extra={"path": str(self._path)})
+
+    async def _write_sqlite_backup(self, payload: bytes) -> None:
+        if not self._backup_path:
+            return
+
+        snapshot = json.loads(payload.decode("utf-8"))
+        await asyncio.to_thread(self._dump_sqlite_backup, snapshot)
+
+    def _dump_sqlite_backup(self, snapshot: Dict[str, Any]) -> None:
+        assert self._backup_path is not None
+        self._backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with sqlite3.connect(self._backup_path) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            cursor = connection.cursor()
+
+            cursor.executescript(
+                """
+                DROP TABLE IF EXISTS admins;
+                DROP TABLE IF EXISTS admin_profiles;
+                DROP TABLE IF EXISTS applications;
+                DROP TABLE IF EXISTS application_responses;
+                DROP TABLE IF EXISTS application_history;
+                DROP TABLE IF EXISTS xp;
+                DROP TABLE IF EXISTS cups;
+                DROP TABLE IF EXISTS metadata;
+
+                CREATE TABLE admins (
+                    user_id INTEGER PRIMARY KEY
+                );
+
+                CREATE TABLE admin_profiles (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT
+                );
+
+                CREATE TABLE applications (
+                    user_id INTEGER PRIMARY KEY,
+                    full_name TEXT,
+                    username TEXT,
+                    answer TEXT,
+                    created_at TEXT,
+                    language_code TEXT
+                );
+
+                CREATE TABLE application_responses (
+                    user_id INTEGER,
+                    position INTEGER,
+                    question_id TEXT,
+                    question TEXT,
+                    answer TEXT,
+                    PRIMARY KEY (user_id, position),
+                    FOREIGN KEY (user_id) REFERENCES applications(user_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE application_history (
+                    user_id INTEGER PRIMARY KEY,
+                    status TEXT,
+                    updated_at TEXT,
+                    note TEXT,
+                    language_code TEXT,
+                    FOREIGN KEY (user_id) REFERENCES applications(user_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE xp (
+                    chat_id TEXT,
+                    user_id TEXT,
+                    score INTEGER,
+                    PRIMARY KEY (chat_id, user_id)
+                );
+
+                CREATE TABLE cups (
+                    chat_id TEXT,
+                    position INTEGER,
+                    title TEXT,
+                    description TEXT,
+                    podium TEXT,
+                    created_at TEXT,
+                    PRIMARY KEY (chat_id, position)
+                );
+
+                CREATE TABLE metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                );
+                """
+            )
+
+            admins = [(int(user_id),) for user_id in snapshot.get("admins", [])]
+            if admins:
+                cursor.executemany("INSERT INTO admins(user_id) VALUES (?)", admins)
+
+            profiles = [
+                (
+                    int(user_id),
+                    profile.get("username"),
+                    profile.get("full_name"),
+                )
+                for user_id, profile in snapshot.get("admin_profiles", {}).items()
+            ]
+            if profiles:
+                cursor.executemany(
+                    "INSERT INTO admin_profiles(user_id, username, full_name) VALUES (?, ?, ?)",
+                    profiles,
+                )
+
+            applications = []
+            responses: List[tuple[int, int, Optional[str], Optional[str], Optional[str]]] = []
+            for user_id, application in snapshot.get("applications", {}).items():
+                int_user_id = int(user_id)
+                applications.append(
+                    (
+                        int_user_id,
+                        application.get("full_name"),
+                        application.get("username"),
+                        application.get("answer"),
+                        application.get("created_at"),
+                        application.get("language_code"),
+                    )
+                )
+                for position, response in enumerate(application.get("responses", [])):
+                    responses.append(
+                        (
+                            int_user_id,
+                            position,
+                            response.get("question_id"),
+                            response.get("question"),
+                            response.get("answer"),
+                        )
+                    )
+
+            if applications:
+                cursor.executemany(
+                    """
+                    INSERT INTO applications(
+                        user_id, full_name, username, answer, created_at, language_code
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    applications,
+                )
+
+            if responses:
+                cursor.executemany(
+                    """
+                    INSERT INTO application_responses(
+                        user_id, position, question_id, question, answer
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    responses,
+                )
+
+            history_rows = [
+                (
+                    int(user_id),
+                    entry.get("status"),
+                    entry.get("updated_at"),
+                    entry.get("note"),
+                    entry.get("language_code"),
+                )
+                for user_id, entry in snapshot.get("application_history", {}).items()
+            ]
+            if history_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO application_history(
+                        user_id, status, updated_at, note, language_code
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    history_rows,
+                )
+
+            xp_rows = [
+                (chat_id, user_id, int(score))
+                for chat_id, scores in snapshot.get("xp", {}).items()
+                for user_id, score in scores.items()
+            ]
+            if xp_rows:
+                cursor.executemany(
+                    "INSERT INTO xp(chat_id, user_id, score) VALUES (?, ?, ?)", xp_rows
+                )
+
+            cups_rows = []
+            for chat_id, cups in snapshot.get("cups", {}).items():
+                for position, cup in enumerate(cups):
+                    cups_rows.append(
+                        (
+                            chat_id,
+                            position,
+                            cup.get("title"),
+                            cup.get("description"),
+                            json.dumps(cup.get("podium", []), ensure_ascii=False),
+                            cup.get("created_at"),
+                        )
+                    )
+            if cups_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO cups(
+                        chat_id, position, title, description, podium, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    cups_rows,
+                )
+
+            cursor.execute(
+                "INSERT INTO metadata(key, value) VALUES (?, ?)",
+                ("raw_snapshot", json.dumps(snapshot, ensure_ascii=False)),
+            )
+            cursor.execute(
+                "INSERT INTO metadata(key, value) VALUES (?, ?)",
+                ("exported_at", datetime.utcnow().isoformat()),
+            )
 

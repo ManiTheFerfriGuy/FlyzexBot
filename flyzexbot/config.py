@@ -31,6 +31,7 @@ class CupConfig:
 @dataclass
 class StorageConfig:
     path: Path
+    backup_path: Optional[Path] = None
 
 
 @dataclass
@@ -107,6 +108,7 @@ class Settings:
 
         storage = StorageConfig(
             path=Path(data["storage"]["path"]),
+            backup_path=Path(data["storage"]["backup_path"]) if data["storage"].get("backup_path") else None,
         )
 
         logging_cfg = data.get("logging", {})
