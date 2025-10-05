@@ -86,6 +86,7 @@ class ApplicationHistoryEntry:
 @dataclass
 class StorageState:
     admins: List[int] = field(default_factory=list)
+    admin_profiles: Dict[int, Dict[str, Optional[str]]] = field(default_factory=dict)
     applications: Dict[int, Application] = field(default_factory=dict)
     application_history: Dict[int, ApplicationHistoryEntry] = field(default_factory=dict)
     xp: Dict[str, Dict[str, int]] = field(default_factory=dict)
@@ -94,6 +95,14 @@ class StorageState:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "admins": self.admins,
+            "admin_profiles": {
+                str(user_id): {
+                    key: value
+                    for key, value in profile.items()
+                    if value is not None
+                }
+                for user_id, profile in self.admin_profiles.items()
+            },
             "applications": {
                 str(k): {
                     **vars(v),
@@ -137,6 +146,14 @@ class StorageState:
             )
         return cls(
             admins=list(payload.get("admins", [])),
+            admin_profiles={
+                int(user_id): {
+                    key: value
+                    for key, value in (profile or {}).items()
+                    if isinstance(value, str) and value
+                }
+                for user_id, profile in payload.get("admin_profiles", {}).items()
+            },
             applications=applications,
             application_history=application_history,
             xp={k: {user: int(score) for user, score in v.items()} for k, v in payload.get("xp", {}).items()},
@@ -183,11 +200,39 @@ class Storage:
         payload = await self._snapshot()
         await self._write_snapshot(payload)
 
-    async def add_admin(self, user_id: int) -> bool:
+    async def add_admin(
+        self,
+        user_id: int,
+        username: Optional[str] = None,
+        full_name: Optional[str] = None,
+    ) -> bool:
+        normalized_username = username.strip() if isinstance(username, str) else None
+        if normalized_username:
+            normalized_username = normalized_username.lstrip("@") or None
+
+        normalized_full_name = full_name.strip() if isinstance(full_name, str) else None
         async with self._lock:
-            if user_id in self._state.admins:
+            profile = self._state.admin_profiles.setdefault(user_id, {})
+            changed = False
+
+            if user_id not in self._state.admins:
+                self._state.admins.append(user_id)
+                changed = True
+
+            if normalized_username and profile.get("username") != normalized_username:
+                profile["username"] = normalized_username
+                changed = True
+
+            if normalized_full_name and profile.get("full_name") != normalized_full_name:
+                profile["full_name"] = normalized_full_name
+                changed = True
+
+            if not profile:
+                self._state.admin_profiles.pop(user_id, None)
+
+            if not changed:
                 return False
-            self._state.admins.append(user_id)
+
         await self.save()
         LOGGER.info("admin_added", extra={"user_id": user_id})
         return True
@@ -197,6 +242,7 @@ class Storage:
             if user_id not in self._state.admins:
                 return False
             self._state.admins.remove(user_id)
+            self._state.admin_profiles.pop(user_id, None)
         await self.save()
         LOGGER.info("admin_removed", extra={"user_id": user_id})
         return True
@@ -206,6 +252,27 @@ class Storage:
 
     def list_admins(self) -> List[int]:
         return list(self._state.admins)
+
+    def get_admin_details(self) -> List[Dict[str, Optional[str]]]:
+        details: List[Dict[str, Optional[str]]] = []
+        for admin_id in self._state.admins:
+            profile = self._state.admin_profiles.get(admin_id, {})
+            username = profile.get("username")
+            full_name = profile.get("full_name")
+
+            application = self._state.applications.get(admin_id)
+            if application:
+                username = username or application.username
+                full_name = full_name or application.full_name
+
+            details.append(
+                {
+                    "user_id": admin_id,
+                    "username": username,
+                    "full_name": full_name,
+                }
+            )
+        return details
 
     async def add_application(
         self,

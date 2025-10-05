@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from flyzexbot.config import Settings
 from flyzexbot.services.security import EncryptionManager
@@ -81,6 +82,43 @@ async def index() -> str:
 async def pending_applications(storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
     applications = [_application_to_dict(app) for app in storage.get_pending_applications()]
     return {"total": len(applications), "applications": applications}
+
+
+class AdminPayload(BaseModel):
+    user_id: int = Field(..., ge=1, description="Telegram user identifier.")
+    username: str | None = Field(
+        None,
+        max_length=64,
+        description="Public username without the @ prefix.",
+    )
+    full_name: str | None = Field(None, max_length=128, description="Display name of the admin.")
+
+
+@app.get("/api/admins")
+async def list_admins(storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
+    admins = storage.get_admin_details()
+    return {"total": len(admins), "admins": admins}
+
+
+@app.post("/api/admins")
+async def create_admin(payload: AdminPayload, storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
+    existing = storage.is_admin(payload.user_id)
+    username = payload.username or None
+    full_name = payload.full_name or None
+    created = await storage.add_admin(payload.user_id, username=username, full_name=full_name)
+    if not created and existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ادمین از قبل ثبت شده است.")
+    if not created:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="امکان افزودن ادمین وجود ندارد.")
+    status_text = "updated" if existing else "created"
+    return {"status": status_text}
+
+
+@app.delete("/api/admins/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_admin(user_id: int, storage: Storage = Depends(get_storage)) -> None:
+    removed = await storage.remove_admin(user_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ادمین یافت نشد.")
 
 
 @app.get("/api/xp")
