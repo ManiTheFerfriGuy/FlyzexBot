@@ -8,7 +8,7 @@ the optional dependency is not possible due to network restrictions.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Iterable, Iterator, MutableMapping, Tuple, TypeVar
+from typing import Iterable, Iterator, MutableMapping, Tuple, TypeVar, overload, cast
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -53,13 +53,23 @@ class LRUCache(MutableMapping[KT, VT]):
     def values(self) -> Iterable[VT]:
         return self._store.values()
 
-    def pop(self, key: KT, default: VT | None = None) -> VT:
+    _MISSING = object()
+
+    @overload
+    def pop(self, key: KT) -> VT:
+        ...
+
+    @overload
+    def pop(self, key: KT, default: VT) -> VT:
+        ...
+
+    def pop(self, key: KT, default: VT | object = _MISSING) -> VT:
         if key in self._store:
             value = self._store.pop(key)
             return value
-        if default is not None:
-            return default
-        raise KeyError(key)
+        if default is self._MISSING:
+            raise KeyError(key)
+        return cast(VT, default)
 
     def popitem(self) -> Tuple[KT, VT]:
         return self._store.popitem()
