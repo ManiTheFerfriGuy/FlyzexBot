@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,13 +10,16 @@ from flyzexbot.localization import ENGLISH_TEXTS, PERSIAN_TEXTS
 from flyzexbot.services.storage import (
     Application,
     ApplicationHistoryEntry,
+    LOCAL_TIMEZONE,
     format_timestamp,
 )
 from flyzexbot.ui.keyboards import admin_panel_keyboard, glass_dm_welcome_keyboard
 
 
 def build_ts(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> str:
-    return format_timestamp(datetime(year, month, day, hour, minute, tzinfo=timezone.utc))
+    return format_timestamp(
+        datetime(year, month, day, hour, minute, tzinfo=LOCAL_TIMEZONE)
+    )
 
 
 MODERN_TS = build_ts(2024, 6, 1, 12, 0)

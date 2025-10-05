@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -16,7 +16,7 @@ def anyio_backend() -> str:
 
 from flyzexbot.handlers.dm import DMHandlers
 from flyzexbot.handlers.group import GroupHandlers
-from flyzexbot.services.storage import Application, format_timestamp
+from flyzexbot.services.storage import Application, LOCAL_TIMEZONE, format_timestamp
 
 
 class DummyChat:
@@ -69,7 +69,7 @@ async def test_dm_application_rendering_escapes_html() -> None:
         full_name="Eve <Leader>",
         username="eve<leader>",
         answer="I love & support",
-        created_at=format_timestamp(datetime(2024, 1, 1, tzinfo=timezone.utc)),
+        created_at=format_timestamp(datetime(2024, 1, 1, tzinfo=LOCAL_TIMEZONE)),
     )
     storage = DMStorageStub(application)
     handlers = DMHandlers(storage, owner_id=1)
