@@ -69,6 +69,8 @@ def test_application_flow(tmp_path: Path) -> None:
         status_after_review = storage.get_application_status(11)
         assert status_after_review is not None
         assert status_after_review.status == "approved"
+        reapply_after_approval = await storage.add_application(11, "User", None, "New Answer")
+        assert not reapply_after_approval
 
         added_with_language = await storage.add_application(12, "User", None, "Answer 3", language_code="en")
         assert added_with_language

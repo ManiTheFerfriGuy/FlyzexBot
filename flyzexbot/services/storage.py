@@ -284,6 +284,9 @@ class Storage:
         responses: Optional[List[ApplicationResponse]] = None,
     ) -> bool:
         async with self._lock:
+            history_entry = self._state.application_history.get(user_id)
+            if history_entry and history_entry.status == "approved":
+                return False
             if user_id in self._state.applications:
                 return False
             timestamp = format_timestamp()

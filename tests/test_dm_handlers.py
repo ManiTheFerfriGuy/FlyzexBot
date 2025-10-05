@@ -92,6 +92,7 @@ def test_handle_apply_allows_admins_to_start_application() -> None:
     storage = SimpleNamespace(
         is_admin=lambda _: True,
         has_application=lambda _: False,
+        get_application_status=lambda _: None,
     )
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
@@ -112,6 +113,7 @@ def test_handle_apply_prevents_duplicate_for_admin() -> None:
     storage = SimpleNamespace(
         is_admin=lambda _: True,
         has_application=lambda _: True,
+        get_application_status=lambda _: None,
     )
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
@@ -128,10 +130,33 @@ def test_handle_apply_prevents_duplicate_for_admin() -> None:
     assert chat.messages == []
 
 
+def test_handle_apply_prevents_reapplication_for_members() -> None:
+    history_entry = SimpleNamespace(status="approved")
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        has_application=lambda _: False,
+        get_application_status=lambda _: history_entry,
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(12)
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_apply_callback(update, context))
+
+    query.answer.assert_awaited()
+    query.edit_message_text.assert_awaited_once_with(PERSIAN_TEXTS.dm_application_already_member)
+    assert "is_filling_application" not in context.user_data
+    assert chat.messages == []
+
+
 def test_multi_step_application_flow_collects_responses() -> None:
     storage = SimpleNamespace(
         has_application=lambda _: False,
         add_application=AsyncMock(return_value=True),
+        get_application_status=lambda _: None,
     )
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
