@@ -15,6 +15,8 @@ const cupsStatus = document.getElementById('cups-status');
 const cupsList = document.getElementById('cups-list');
 const cupsChatInput = document.getElementById('cups-chat-id');
 const cupsLimitInput = document.getElementById('cups-limit');
+const analyticsStatus = document.getElementById('analytics-status');
+const analyticsContent = document.getElementById('analytics-content');
 
 const fetchJSON = async (url) => {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -66,8 +68,28 @@ const loadPendingApplications = async () => {
       title.className = 'item-title';
       title.textContent = `${application.full_name} — ${application.user_id}`;
 
-      const answer = document.createElement('p');
-      answer.textContent = application.answer;
+      const answerBlock = document.createElement('div');
+      answerBlock.className = 'answer-block';
+      const responses = Array.isArray(application.responses) ? application.responses : [];
+      if (responses.length) {
+        const list = document.createElement('ul');
+        list.className = 'answer-list';
+        responses.forEach((response) => {
+          const itemRow = document.createElement('li');
+          const question = document.createElement('strong');
+          question.textContent = response.question;
+          itemRow.appendChild(question);
+          const answerText = document.createElement('span');
+          answerText.textContent = ` ${response.answer || '—'}`;
+          itemRow.appendChild(answerText);
+          list.appendChild(itemRow);
+        });
+        answerBlock.appendChild(list);
+      } else {
+        const fallback = document.createElement('p');
+        fallback.textContent = application.answer || '—';
+        answerBlock.appendChild(fallback);
+      }
 
       const metadata = document.createElement('span');
       metadata.className = 'item-meta';
@@ -82,7 +104,7 @@ const loadPendingApplications = async () => {
       metadata.textContent = parts.join(' | ');
 
       item.appendChild(title);
-      item.appendChild(answer);
+      item.appendChild(answerBlock);
       if (metadata.textContent) {
         item.appendChild(metadata);
       }
@@ -214,6 +236,78 @@ const handleCupsSubmit = async (event) => {
   }
 };
 
+const loadAnalytics = async () => {
+  if (!analyticsStatus || !analyticsContent) return;
+  analyticsStatus.textContent = 'در حال جمع‌آوری آمار...';
+  analyticsContent.innerHTML = '';
+
+  try {
+    const data = await fetchJSON('/api/applications/insights');
+    analyticsStatus.textContent = 'آخرین وضعیت ثبت شد.';
+
+    const card = document.createElement('article');
+    card.className = 'data-card';
+
+    const statusCounts = data.status_counts || {};
+    const counts = document.createElement('div');
+    counts.innerHTML = `
+      <h3>وضعیت درخواست‌ها</h3>
+      <ul>
+        <li>در انتظار بررسی: ${data.pending ?? 0}</li>
+        <li>تأیید شده: ${statusCounts.approved ?? 0}</li>
+        <li>رد شده: ${statusCounts.denied ?? 0}</li>
+        <li>لغو شده: ${statusCounts.withdrawn ?? 0}</li>
+        <li>مجموع ثبت‌شده: ${data.total ?? 0}</li>
+        <li>میانگین طول پاسخ‌های در انتظار: ${(data.average_pending_answer_length ?? 0).toFixed(1)}</li>
+      </ul>
+    `;
+    card.appendChild(counts);
+
+    const languages = document.createElement('div');
+    languages.innerHTML = '<h3>زبان‌های ترجیحی</h3>';
+    const languageEntries = data.languages ? Object.entries(data.languages) : [];
+    if (languageEntries.length) {
+      const list = document.createElement('ul');
+      languageEntries
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .forEach(([code, count]) => {
+          const li = document.createElement('li');
+          li.textContent = `${code}: ${count}`;
+          list.appendChild(li);
+        });
+      languages.appendChild(list);
+    } else {
+      const empty = document.createElement('p');
+      empty.textContent = 'هنوز زبانی ثبت نشده است.';
+      languages.appendChild(empty);
+    }
+    card.appendChild(languages);
+
+    const recent = document.createElement('div');
+    recent.innerHTML = '<h3>آخرین فعالیت‌ها</h3>';
+    const updates = Array.isArray(data.recent_updates) ? data.recent_updates : [];
+    if (updates.length) {
+      const list = document.createElement('ul');
+      updates.forEach((entry) => {
+        const li = document.createElement('li');
+        const time = formatDateTime(entry.updated_at);
+        li.textContent = `${entry.user_id}: ${entry.status} ${time ? `(${time})` : ''}`;
+        list.appendChild(li);
+      });
+      recent.appendChild(list);
+    } else {
+      const empty = document.createElement('p');
+      empty.textContent = 'هنوز فعالیت ثبت نشده است.';
+      recent.appendChild(empty);
+    }
+    card.appendChild(recent);
+
+    analyticsContent.appendChild(card);
+  } catch (error) {
+    analyticsStatus.textContent = `خطا در دریافت آمار: ${error.message}`;
+  }
+};
+
 viewButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const viewId = button.dataset.view;
@@ -230,6 +324,10 @@ viewButtons.forEach((button) => {
 
     if (viewId === 'cups' && cupsChatInput) {
       cupsChatInput.focus();
+    }
+
+    if (viewId === 'analytics') {
+      loadAnalytics();
     }
   });
 });

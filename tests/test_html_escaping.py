@@ -91,7 +91,7 @@ async def test_dm_application_rendering_escapes_html() -> None:
     "language_code,expected_xp_title,expected_cup_title,expected_separator",
     [
         ("fa", "🏆 جدول تجربه اعضای فعال", "🥇 جدول جام‌های گیلد", "، "),
-        ("en", "🏆 Active members leaderboard", "🥇 Guild cups leaderboard", ", "),
+    ("en", "🏆 Experience leaderboard", "🥇 Guild cups leaderboard", ", "),
     ],
 )
 async def test_group_leaderboards_escape_user_generated_content(

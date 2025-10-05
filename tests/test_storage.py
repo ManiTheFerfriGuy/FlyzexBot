@@ -43,14 +43,17 @@ def test_application_flow(tmp_path: Path) -> None:
         assert storage.has_application(10)
         application = storage.get_application(10)
         assert application is not None
+        assert application.responses == []
         status = storage.get_application_status(10)
         assert status is not None
         assert status.status == "pending"
+        assert status.language_code is None
         withdrew = await storage.withdraw_application(10)
         assert withdrew
         status_after_withdraw = storage.get_application_status(10)
         assert status_after_withdraw is not None
         assert status_after_withdraw.status == "withdrawn"
+        assert status_after_withdraw.language_code is None
         assert not storage.has_application(10)
 
         added_again = await storage.add_application(11, "User", "Answer 2")
@@ -67,6 +70,9 @@ def test_application_flow(tmp_path: Path) -> None:
         application_with_language = storage.get_application(12)
         assert application_with_language is not None
         assert application_with_language.language_code == "en"
+        stats = storage.get_application_statistics()
+        assert "pending" in stats
+        assert isinstance(stats.get("languages"), dict)
 
     asyncio.run(runner())
 

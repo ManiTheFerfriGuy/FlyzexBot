@@ -18,6 +18,7 @@
         <button type="button" data-view="pending">بررسی درخواست‌ها</button>
         <button type="button" data-view="xp">نمایش لیدربورد XP</button>
         <button type="button" data-view="cups">نمایش جام‌ها</button>
+        <button type="button" data-view="analytics">گزارش مدیریتی</button>
       </div>
       <div id="view-container">
         <section id="view-overview" class="view active">
@@ -59,6 +60,11 @@
           </form>
           <p id="cups-status" class="status">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
           <div id="cups-list" aria-live="polite"></div>
+        </section>
+        <section id="view-analytics" class="view">
+          <h2>گزارش لحظه‌ای</h2>
+          <p id="analytics-status" class="status">برای مشاهده آمار دکمه گزارش مدیریتی را انتخاب کنید.</p>
+          <div id="analytics-content" class="analytics-card" aria-live="polite"></div>
         </section>
       </div>
     </section>

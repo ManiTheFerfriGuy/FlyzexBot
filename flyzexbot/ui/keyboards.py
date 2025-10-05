@@ -87,6 +87,12 @@ def admin_panel_keyboard(
                 callback_data="admin_panel:add_admin",
             )
         ],
+        [
+            InlineKeyboardButton(
+                text=f"📊 {text_pack.dm_admin_panel_insights_button}",
+                callback_data="admin_panel:insights",
+            )
+        ],
     ]
     if webapp_url:
         rows.append(
