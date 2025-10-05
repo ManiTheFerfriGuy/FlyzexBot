@@ -7,7 +7,7 @@ import logging
 import os
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -19,13 +19,16 @@ from .security import EncryptionManager
 LOGGER = logging.getLogger(__name__)
 
 
-def format_timestamp(dt: Optional[datetime] = None) -> str:
-    """Return a compact, human-friendly UTC timestamp."""
+LOCAL_TIMEZONE = timezone(timedelta(hours=3, minutes=30))
 
-    moment = dt or datetime.now(timezone.utc)
+
+def format_timestamp(dt: Optional[datetime] = None) -> str:
+    """Return a compact, human-friendly timestamp in the local timezone."""
+
+    moment = dt or datetime.now(LOCAL_TIMEZONE)
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    moment = moment.astimezone(timezone.utc)
+        moment = moment.replace(tzinfo=LOCAL_TIMEZONE)
+    moment = moment.astimezone(LOCAL_TIMEZONE)
 
     date_part = moment.strftime("%Y/%m/%d · %H:%M:%S")
     offset = moment.utcoffset()
@@ -50,7 +53,7 @@ def normalize_timestamp(value: str) -> str:
         return value
 
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=LOCAL_TIMEZONE)
     return format_timestamp(parsed)
 
 
