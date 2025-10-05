@@ -18,7 +18,7 @@ from ..services.storage import (
     ApplicationResponse,
     Storage,
 )
-from ..ui.keyboards import (admin_panel_keyboard,
+from ..ui.keyboards import (admin_management_keyboard, admin_panel_keyboard,
                             application_review_keyboard,
                             glass_dm_welcome_keyboard,
                             language_options_keyboard)
@@ -178,17 +178,64 @@ class DMHandlers:
             await self.analytics.record("dm.admin_panel_view_members")
             return
 
-        if action == "add_admin":
+        if action.startswith("manage_admins"):
             if user.id != self.owner_id:
                 await query.answer(texts.dm_not_owner, show_alert=True)
                 return
-            await query.answer()
-            if isinstance(context.user_data, dict):
-                context.user_data["pending_admin_action"] = "promote"
-            if chat is not None:
-                await chat.send_message(texts.dm_admin_panel_add_admin_prompt)
-            await self.analytics.record("dm.admin_panel_add_admin")
-            return
+
+            sub_action = ""
+            if ":" in action:
+                _, sub_action = action.split(":", 1)
+
+            if sub_action == "":
+                await query.answer()
+                management_text = self._build_admin_management_text(texts)
+                await query.edit_message_text(
+                    text=management_text,
+                    reply_markup=admin_management_keyboard(texts),
+                    parse_mode=ParseMode.HTML,
+                )
+                await self.analytics.record("dm.admin_panel_manage_admins_opened")
+                return
+
+            if sub_action == "add":
+                await query.answer()
+                if isinstance(context.user_data, dict):
+                    context.user_data["pending_admin_action"] = "promote"
+                if chat is not None:
+                    await chat.send_message(texts.dm_admin_panel_add_admin_prompt)
+                await self.analytics.record("dm.admin_panel_manage_admins_add")
+                return
+
+            if sub_action == "remove":
+                await query.answer()
+                if isinstance(context.user_data, dict):
+                    context.user_data["pending_admin_action"] = "demote"
+                if chat is not None:
+                    await chat.send_message(texts.dm_admin_enter_user_id)
+                await self.analytics.record("dm.admin_panel_manage_admins_remove")
+                return
+
+            if sub_action == "list":
+                await query.answer()
+                if chat is not None:
+                    admins_text = self._render_admins_list(texts)
+                    await chat.send_message(admins_text, parse_mode=ParseMode.HTML)
+                await self.analytics.record("dm.admin_panel_manage_admins_list")
+                return
+
+            if sub_action == "back":
+                await query.answer()
+                await query.edit_message_text(
+                    text=self._build_admin_panel_text(texts),
+                    reply_markup=admin_panel_keyboard(
+                        texts,
+                        self._get_webapp_url(context),
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
+                await self.analytics.record("dm.admin_panel_manage_admins_back")
+                return
 
         if action == "insights":
             await query.answer()
@@ -236,9 +283,14 @@ class DMHandlers:
             await self._process_admin_note_response(update, context)
             return
 
-        if isinstance(context.user_data, dict) and context.user_data.get("pending_admin_action") == "promote":
-            await self._process_admin_promote_response(update, context)
-            return
+        if isinstance(context.user_data, dict):
+            pending_action = context.user_data.get("pending_admin_action")
+            if pending_action == "promote":
+                await self._process_admin_promote_response(update, context)
+                return
+            if pending_action == "demote":
+                await self._process_admin_demote_response(update, context)
+                return
 
         if not context.user_data.get("is_filling_application"):
             return
@@ -493,6 +545,35 @@ class DMHandlers:
         await self.analytics.record("dm.admin_panel_promote_completed")
 
 
+    async def _process_admin_demote_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        message = update.message
+        user = update.effective_user
+        chat = update.effective_chat
+        if message is None or user is None or chat is None:
+            return
+
+        if user.id != self.owner_id:
+            context.user_data.pop("pending_admin_action", None)
+            return
+
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        payload = (message.text or "").strip()
+        try:
+            target_user_id = int(payload)
+        except (TypeError, ValueError):
+            await message.reply_text(texts.dm_admin_invalid_user_id)
+            return
+
+        removed = await self.storage.remove_admin(target_user_id)
+        if removed:
+            await chat.send_message(texts.dm_admin_removed.format(user_id=target_user_id))
+        else:
+            await chat.send_message(texts.dm_not_admin.format(user_id=target_user_id))
+
+        context.user_data.pop("pending_admin_action", None)
+        await self.analytics.record("dm.admin_panel_demote_completed")
+
+
     async def _notify_user(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str) -> None:
         try:
             await context.bot.send_message(chat_id=user_id, text=text)
@@ -505,12 +586,11 @@ class DMHandlers:
             return
         language_code = getattr(update.effective_user, "language_code", None)
         texts = self._get_texts(context, language_code)
-        admins = self.storage.list_admins()
-        if not admins:
+        admins_text = self._render_admins_list(texts)
+        if admins_text == texts.dm_admin_manage_list_empty:
             await chat.send_message(texts.dm_no_admins)
             return
-        formatted = "\n".join(str(admin) for admin in admins)
-        await chat.send_message(texts.admin_list_header.format(admins=formatted))
+        await chat.send_message(admins_text, parse_mode=ParseMode.HTML)
 
     async def promote_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._check_owner(update):
@@ -706,6 +786,56 @@ class DMHandlers:
 
     def _build_admin_panel_text(self, texts: TextPack) -> str:
         return f"{texts.dm_admin_panel_intro}\n\n{texts.glass_panel_caption}"
+
+    def _build_admin_management_text(self, texts: TextPack) -> str:
+        admins_list = self._render_admins_list(texts)
+        return "\n\n".join(
+            [texts.dm_admin_manage_title, texts.dm_admin_manage_intro, admins_list]
+        )
+
+    def _render_admins_list(self, texts: TextPack) -> str:
+        details_getter = getattr(self.storage, "get_admin_details", None)
+        details: List[Dict[str, Any]] | None = None
+        if callable(details_getter):
+            details = details_getter()
+        else:
+            list_getter = getattr(self.storage, "list_admins", None)
+            if callable(list_getter):
+                details = [{"user_id": admin_id} for admin_id in list_getter()]
+
+        if not details:
+            return texts.dm_admin_manage_list_empty
+
+        lines: List[str] = [texts.dm_admin_manage_list_header]
+        for entry in details:
+            user_id = entry.get("user_id")
+            if user_id is None:
+                continue
+
+            parts: List[str] = []
+            full_name = entry.get("full_name")
+            if full_name:
+                parts.append(escape(str(full_name)))
+
+            username = entry.get("username")
+            if username:
+                normalised = str(username).lstrip("@")
+                if normalised:
+                    parts.append(f"@{escape(normalised)}")
+
+            if not parts:
+                parts.append(texts.dm_admin_manage_list_unknown)
+
+            display = " / ".join(parts)
+            safe_user_id = escape(str(user_id))
+            lines.append(
+                texts.dm_admin_manage_list_entry.format(
+                    display=display,
+                    user_id=safe_user_id,
+                )
+            )
+
+        return "\n".join(lines)
 
     def _render_members_list(
         self,

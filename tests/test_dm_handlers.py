@@ -218,6 +218,15 @@ def test_admin_panel_keyboard_uses_webapp_link_when_available() -> None:
     assert any(getattr(button, "web_app", None) and button.web_app.url == url for button in buttons)
 
 
+def test_admin_panel_keyboard_includes_manage_admins_button() -> None:
+    markup = admin_panel_keyboard(PERSIAN_TEXTS)
+    buttons = _flatten_keyboard(markup)
+    assert any(
+        getattr(button, "callback_data", "") == "admin_panel:manage_admins"
+        for button in buttons
+    )
+
+
 def test_glass_dm_welcome_keyboard_hides_admin_button_for_regular_users() -> None:
     markup = glass_dm_welcome_keyboard(PERSIAN_TEXTS)
     buttons = _flatten_keyboard(markup)
@@ -266,6 +275,26 @@ def test_start_message_hides_admin_button_for_non_admin() -> None:
     assert chat.messages
     buttons = _flatten_keyboard(chat.messages[-1]["reply_markup"])
     assert all(getattr(button, "callback_data", "") != "admin_panel" for button in buttons)
+
+
+def test_list_admins_shows_details() -> None:
+    storage = SimpleNamespace(
+        list_admins=lambda: [1],
+        get_admin_details=lambda: [
+            {"user_id": 1, "username": "alpha", "full_name": "Alpha"}
+        ],
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    update = SimpleNamespace(effective_user=DummyUser(1), effective_chat=chat)
+    context = DummyContext([])
+
+    asyncio.run(handler.list_admins(update, context))
+
+    assert chat.messages
+    message = chat.messages[-1]
+    assert "Alpha" in message["text"]
+    assert "@alpha" in message["text"]
 
 
 def test_promote_admin_invalid_identifier() -> None:
@@ -475,26 +504,32 @@ def test_handle_admin_panel_action_view_members() -> None:
     assert "321" in chat.messages[-1]["text"]
 
 
-def test_handle_admin_panel_action_add_admin_requires_owner() -> None:
+def test_handle_admin_panel_action_manage_admins_shows_panel_for_owner() -> None:
     storage = SimpleNamespace(
         is_admin=lambda _: True,
         get_pending_applications=lambda: [],
         get_applicants_by_status=lambda status: [],
+        get_admin_details=lambda: [
+            {"user_id": 10, "username": "captain", "full_name": "Captain"}
+        ],
     )
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
     owner_user = DummyUser(1)
-    query = DummyCallbackQuery(owner_user, chat, data="admin_panel:add_admin")
+    query = DummyCallbackQuery(owner_user, chat, data="admin_panel:manage_admins")
     update = SimpleNamespace(callback_query=query)
     context = DummyContext([])
 
     asyncio.run(handler.handle_admin_panel_action(update, context))
 
-    assert context.user_data.get("pending_admin_action") == "promote"
-    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_panel_add_admin_prompt
+    query.edit_message_text.assert_awaited()
+    args = query.edit_message_text.await_args.kwargs
+    assert PERSIAN_TEXTS.dm_admin_manage_title in args["text"]
+    assert "@captain" in args["text"]
+    assert args.get("reply_markup") is not None
 
 
-def test_handle_admin_panel_action_add_admin_blocks_non_owner() -> None:
+def test_handle_admin_panel_action_manage_admins_blocks_non_owner() -> None:
     storage = SimpleNamespace(
         is_admin=lambda _: True,
         get_pending_applications=lambda: [],
@@ -503,7 +538,7 @@ def test_handle_admin_panel_action_add_admin_blocks_non_owner() -> None:
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
     user = DummyUser(99)
-    query = DummyCallbackQuery(user, chat, data="admin_panel:add_admin")
+    query = DummyCallbackQuery(user, chat, data="admin_panel:manage_admins")
     update = SimpleNamespace(callback_query=query)
     context = DummyContext([])
 
@@ -511,6 +546,71 @@ def test_handle_admin_panel_action_add_admin_blocks_non_owner() -> None:
 
     query.answer.assert_awaited_once_with(PERSIAN_TEXTS.dm_not_owner, show_alert=True)
     assert "pending_admin_action" not in context.user_data
+
+
+def test_handle_admin_panel_action_manage_admins_add_sets_pending_action() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        get_pending_applications=lambda: [],
+        get_applicants_by_status=lambda status: [],
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    owner_user = DummyUser(1)
+    query = DummyCallbackQuery(owner_user, chat, data="admin_panel:manage_admins:add")
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_admin_panel_action(update, context))
+
+    query.answer.assert_awaited()
+    assert context.user_data.get("pending_admin_action") == "promote"
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_panel_add_admin_prompt
+
+
+def test_handle_admin_panel_action_manage_admins_remove_sets_pending_action() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        get_pending_applications=lambda: [],
+        get_applicants_by_status=lambda status: [],
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    owner_user = DummyUser(1)
+    query = DummyCallbackQuery(owner_user, chat, data="admin_panel:manage_admins:remove")
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_admin_panel_action(update, context))
+
+    query.answer.assert_awaited()
+    assert context.user_data.get("pending_admin_action") == "demote"
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_enter_user_id
+
+
+def test_handle_admin_panel_action_manage_admins_list_sends_details() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        get_pending_applications=lambda: [],
+        get_applicants_by_status=lambda status: [],
+        get_admin_details=lambda: [
+            {"user_id": 12, "username": "seer", "full_name": "Seer"}
+        ],
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    owner_user = DummyUser(1)
+    query = DummyCallbackQuery(owner_user, chat, data="admin_panel:manage_admins:list")
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_admin_panel_action(update, context))
+
+    query.answer.assert_awaited()
+    assert chat.messages
+    last_message = chat.messages[-1]
+    assert "Seer" in last_message["text"]
+    assert "12" in last_message["text"]
 
 
 def test_handle_admin_panel_action_back_returns_home() -> None:
@@ -553,6 +653,28 @@ def test_receive_application_promote_admin_flow() -> None:
     storage.add_admin.assert_awaited_once_with(123)
     assert context.user_data.get("pending_admin_action") is None
     assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_added.format(user_id=123)
+
+
+def test_receive_application_demote_admin_flow() -> None:
+    storage = SimpleNamespace(
+        remove_admin=AsyncMock(return_value=True),
+        is_admin=lambda _: True,
+        get_pending_applications=lambda: [],
+        get_applicants_by_status=lambda status: [],
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    message = DummyIncomingMessage("321")
+    user = DummyUser(1)
+    update = SimpleNamespace(effective_user=user, effective_chat=chat, message=message)
+    context = DummyContext([])
+    context.user_data["pending_admin_action"] = "demote"
+
+    asyncio.run(handler.receive_application(update, context))
+
+    storage.remove_admin.assert_awaited_once_with(321)
+    assert context.user_data.get("pending_admin_action") is None
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_removed.format(user_id=321)
 
 
 def test_admin_handles_note_for_approval() -> None:

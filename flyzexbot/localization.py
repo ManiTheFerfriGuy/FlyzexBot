@@ -77,12 +77,22 @@ class TextPack:
     dm_admin_panel_intro: str
     dm_admin_panel_view_applications_button: str
     dm_admin_panel_view_members_button: str
-    dm_admin_panel_add_admin_button: str
+    dm_admin_panel_manage_admins_button: str
     dm_admin_panel_more_tools_button: str
     dm_admin_panel_insights_button: str
     dm_admin_panel_back_button: str
     dm_admin_panel_members_header: str
     dm_admin_panel_members_empty: str
+    dm_admin_manage_title: str
+    dm_admin_manage_intro: str
+    dm_admin_manage_add_button: str
+    dm_admin_manage_remove_button: str
+    dm_admin_manage_list_button: str
+    dm_admin_manage_back_button: str
+    dm_admin_manage_list_header: str
+    dm_admin_manage_list_empty: str
+    dm_admin_manage_list_entry: str
+    dm_admin_manage_list_unknown: str
     dm_admin_panel_add_admin_prompt: str
     dm_admin_panel_more_tools_text: str
     dm_admin_panel_more_tools_no_webapp: str
@@ -215,12 +225,22 @@ PERSIAN_TEXTS = TextPack(
     ),
     dm_admin_panel_view_applications_button="مشاهده درخواست‌ها",
     dm_admin_panel_view_members_button="اعضای تایید‌شده",
-    dm_admin_panel_add_admin_button="افزودن ادمین جدید",
+    dm_admin_panel_manage_admins_button="مدیریت ادمین‌ها",
     dm_admin_panel_more_tools_button="ابزارهای بیشتر",
     dm_admin_panel_insights_button="گزارش‌ها و تحلیل‌ها",
     dm_admin_panel_back_button="بازگشت به خانه",
     dm_admin_panel_members_header="✅ اعضای تایید‌شده ({count} نفر):\n{members}",
     dm_admin_panel_members_empty="هیچ عضوی تأیید نشده است.",
+    dm_admin_manage_title="<b>🛡️ مدیریت ادمین‌ها</b>",
+    dm_admin_manage_intro="از گزینه‌های زیر برای افزودن، حذف یا مشاهده فهرست ادمین‌ها استفاده کنید.",
+    dm_admin_manage_add_button="افزودن ادمین",
+    dm_admin_manage_remove_button="حذف ادمین",
+    dm_admin_manage_list_button="نمایش فهرست ادمین‌ها",
+    dm_admin_manage_back_button="بازگشت به پنل اصلی",
+    dm_admin_manage_list_header="<b>ادمین‌های فعال:</b>",
+    dm_admin_manage_list_empty="هیچ ادمینی ثبت نشده است.",
+    dm_admin_manage_list_entry="• {display} — شناسه: <code>{user_id}</code>",
+    dm_admin_manage_list_unknown="بدون نام",
     dm_admin_panel_add_admin_prompt="شناسه عددی کاربر موردنظر را ارسال کنید.",
     dm_admin_panel_more_tools_text=(
         "✨ می‌توانید از نسخه وب برای مدیریت کامل‌تر استفاده کنید:\n"
@@ -369,12 +389,22 @@ ENGLISH_TEXTS = TextPack(
     ),
     dm_admin_panel_view_applications_button="View applications",
     dm_admin_panel_view_members_button="Approved members",
-    dm_admin_panel_add_admin_button="Add a new admin",
+    dm_admin_panel_manage_admins_button="Manage admins",
     dm_admin_panel_more_tools_button="More tools",
     dm_admin_panel_insights_button="Analytics & reports",
     dm_admin_panel_back_button="Back to welcome",
     dm_admin_panel_members_header="✅ Approved members ({count}):\n{members}",
     dm_admin_panel_members_empty="No members have been approved yet.",
+    dm_admin_manage_title="<b>🛡️ Admin management</b>",
+    dm_admin_manage_intro="Use the buttons below to add, remove, or review the current admins.",
+    dm_admin_manage_add_button="Add admin",
+    dm_admin_manage_remove_button="Remove admin",
+    dm_admin_manage_list_button="Show admin list",
+    dm_admin_manage_back_button="Back to main panel",
+    dm_admin_manage_list_header="<b>Current admins:</b>",
+    dm_admin_manage_list_empty="No admins have been registered yet.",
+    dm_admin_manage_list_entry="• {display} — ID: <code>{user_id}</code>",
+    dm_admin_manage_list_unknown="No name",
     dm_admin_panel_add_admin_prompt=(
         "Send the numeric user ID of the member you want to promote."
         "\nSend /cancel to abort."

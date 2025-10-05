@@ -83,8 +83,8 @@ def admin_panel_keyboard(
         ],
         [
             InlineKeyboardButton(
-                text=f"➕ {text_pack.dm_admin_panel_add_admin_button}",
-                callback_data="admin_panel:add_admin",
+                text=f"🧑‍💼 {text_pack.dm_admin_panel_manage_admins_button}",
+                callback_data="admin_panel:manage_admins",
             )
         ],
         [
@@ -121,6 +121,38 @@ def admin_panel_keyboard(
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+def admin_management_keyboard(texts: TextPack | None = None) -> InlineKeyboardMarkup:
+    text_pack = texts or PERSIAN_TEXTS
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    text=f"➕ {text_pack.dm_admin_manage_add_button}",
+                    callback_data="admin_panel:manage_admins:add",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"➖ {text_pack.dm_admin_manage_remove_button}",
+                    callback_data="admin_panel:manage_admins:remove",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"📋 {text_pack.dm_admin_manage_list_button}",
+                    callback_data="admin_panel:manage_admins:list",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"⬅️ {text_pack.dm_admin_manage_back_button}",
+                    callback_data="admin_panel:manage_admins:back",
+                )
+            ],
+        ]
+    )
 
 
 def application_review_keyboard(user_id: int, texts: TextPack | None = None) -> InlineKeyboardMarkup:
