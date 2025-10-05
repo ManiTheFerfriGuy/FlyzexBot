@@ -177,6 +177,39 @@ body {
   color: #fff;
 }
 
+.admin-actions {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  grid-template-columns: 1fr;
+}
+
+.card-form {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+}
+
+.card-form h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.card-form button {
+  justify-self: stretch;
+}
+
+.form-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.card-form .form-status {
+  margin-top: 0.5rem;
+}
+
 .podium-list {
   list-style: decimal;
   margin: 0.75rem 0 0;
@@ -190,5 +223,15 @@ body {
 
   .glass-panel h1 {
     font-size: 1.5rem;
+  }
+
+  .admin-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 720px) {
+  .admin-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

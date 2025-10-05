@@ -18,11 +18,26 @@ const cupsLimitInput = document.getElementById('cups-limit');
 const analyticsStatus = document.getElementById('analytics-status');
 const analyticsContent = document.getElementById('analytics-content');
 
-const fetchJSON = async (url) => {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+const adminAddForm = document.getElementById('admin-add-form');
+const adminRemoveForm = document.getElementById('admin-remove-form');
+const adminAddStatus = document.getElementById('admin-add-status');
+const adminRemoveStatus = document.getElementById('admin-remove-status');
+const adminsStatus = document.getElementById('admins-status');
+const adminsList = document.getElementById('admins-list');
+const adminAddUserIdInput = document.getElementById('admin-add-user-id');
+const adminAddUsernameInput = document.getElementById('admin-add-username');
+const adminAddFullNameInput = document.getElementById('admin-add-full-name');
+const adminRemoveUserIdInput = document.getElementById('admin-remove-user-id');
+
+const fetchJSON = async (url, options = {}) => {
+  const headers = { Accept: 'application/json', ...(options.headers || {}) };
+  const response = await fetch(url, { ...options, headers });
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || 'خطای غیرمنتظره رخ داده است');
+  }
+  if (response.status === 204) {
+    return null;
   }
   return response.json();
 };
@@ -125,6 +140,50 @@ const loadPendingApplications = async () => {
     });
   } catch (error) {
     pendingStatus.textContent = `خطا در دریافت درخواست‌ها: ${error.message}`;
+  }
+};
+
+const loadAdmins = async () => {
+  if (!adminsStatus || !adminsList) return;
+  adminsStatus.textContent = 'در حال دریافت فهرست ادمین‌ها...';
+  adminsList.innerHTML = '';
+
+  try {
+    const data = await fetchJSON('/api/admins');
+    const admins = data?.admins || [];
+    if (!admins.length) {
+      adminsStatus.textContent = 'هیچ ادمینی ثبت نشده است.';
+      return;
+    }
+
+    adminsStatus.textContent = `تعداد ${data.total ?? admins.length} ادمین فعال ثبت شده است.`;
+    admins.forEach((admin) => {
+      const item = document.createElement('li');
+
+      const title = document.createElement('span');
+      title.className = 'item-title';
+      title.textContent = admin.full_name || 'بدون نام';
+
+      const username = document.createElement('span');
+      username.className = 'item-username';
+      if (admin.username) {
+        const normalised = String(admin.username).replace(/^@+/, '');
+        username.textContent = `نام کاربری: @${normalised}`;
+      } else {
+        username.textContent = 'نام کاربری: —';
+      }
+
+      const meta = document.createElement('span');
+      meta.className = 'item-meta';
+      meta.textContent = `شناسه کاربری: ${admin.user_id}`;
+
+      item.appendChild(title);
+      item.appendChild(username);
+      item.appendChild(meta);
+      adminsList.appendChild(item);
+    });
+  } catch (error) {
+    adminsStatus.textContent = `خطا در دریافت فهرست ادمین‌ها: ${error.message}`;
   }
 };
 
@@ -321,6 +380,86 @@ const loadAnalytics = async () => {
   }
 };
 
+const handleAdminAdd = async (event) => {
+  event.preventDefault();
+  if (!adminAddStatus || !adminAddUserIdInput) return;
+
+  const userIdValue = adminAddUserIdInput.value.trim();
+  if (!userIdValue) {
+    adminAddStatus.textContent = 'لطفاً شناسه کاربری را وارد کنید.';
+    return;
+  }
+
+  const parsedUserId = Number.parseInt(userIdValue, 10);
+  if (Number.isNaN(parsedUserId)) {
+    adminAddStatus.textContent = 'شناسه کاربری باید یک عدد معتبر باشد.';
+    return;
+  }
+
+  const payload = {
+    user_id: parsedUserId,
+  };
+  const usernameValue = adminAddUsernameInput?.value.trim();
+  if (usernameValue) {
+    payload.username = usernameValue;
+  }
+  const fullNameValue = adminAddFullNameInput?.value.trim();
+  if (fullNameValue) {
+    payload.full_name = fullNameValue;
+  }
+
+  adminAddStatus.textContent = 'در حال افزودن ادمین...';
+
+  try {
+    const result = await fetchJSON('/api/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (result?.status === 'updated') {
+      adminAddStatus.textContent = 'اطلاعات ادمین به‌روزرسانی شد.';
+    } else {
+      adminAddStatus.textContent = 'ادمین با موفقیت افزوده شد.';
+    }
+    adminAddForm?.reset();
+    adminAddUserIdInput.focus();
+    await loadAdmins();
+  } catch (error) {
+    adminAddStatus.textContent = `خطا در افزودن ادمین: ${error.message}`;
+  }
+};
+
+const handleAdminRemove = async (event) => {
+  event.preventDefault();
+  if (!adminRemoveStatus || !adminRemoveUserIdInput) return;
+
+  const userIdValue = adminRemoveUserIdInput.value.trim();
+  if (!userIdValue) {
+    adminRemoveStatus.textContent = 'لطفاً شناسه کاربری را وارد کنید.';
+    return;
+  }
+
+  const parsedUserId = Number.parseInt(userIdValue, 10);
+  if (Number.isNaN(parsedUserId)) {
+    adminRemoveStatus.textContent = 'شناسه کاربری باید یک عدد معتبر باشد.';
+    return;
+  }
+
+  adminRemoveStatus.textContent = 'در حال حذف ادمین...';
+
+  try {
+    await fetchJSON(`/api/admins/${encodeURIComponent(parsedUserId)}`, {
+      method: 'DELETE',
+    });
+    adminRemoveStatus.textContent = 'ادمین با موفقیت حذف شد.';
+    adminRemoveForm?.reset();
+    adminRemoveUserIdInput.focus();
+    await loadAdmins();
+  } catch (error) {
+    adminRemoveStatus.textContent = `خطا در حذف ادمین: ${error.message}`;
+  }
+};
+
 viewButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const viewId = button.dataset.view;
@@ -329,6 +468,13 @@ viewButtons.forEach((button) => {
 
     if (viewId === 'pending') {
       loadPendingApplications();
+    }
+
+    if (viewId === 'admins') {
+      loadAdmins();
+      if (adminAddUserIdInput) {
+        adminAddUserIdInput.focus();
+      }
     }
 
     if (viewId === 'xp' && xpChatInput) {
@@ -347,3 +493,5 @@ viewButtons.forEach((button) => {
 
 xpForm?.addEventListener('submit', handleLeaderboardSubmit);
 cupsForm?.addEventListener('submit', handleCupsSubmit);
+adminAddForm?.addEventListener('submit', handleAdminAdd);
+adminRemoveForm?.addEventListener('submit', handleAdminRemove);

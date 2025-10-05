@@ -22,10 +22,15 @@ def test_admin_management(tmp_path: Path) -> None:
         await storage.load()
 
         assert not storage.list_admins()
-        assert await storage.add_admin(1)
+        assert await storage.add_admin(1, username="@founder", full_name="Founder")
+        details = storage.get_admin_details()
+        assert details == [
+            {"user_id": 1, "username": "founder", "full_name": "Founder"}
+        ]
         assert not await storage.add_admin(1)
         assert storage.is_admin(1)
         assert await storage.remove_admin(1)
+        assert storage.get_admin_details() == []
         assert not await storage.remove_admin(1)
 
     asyncio.run(runner())
