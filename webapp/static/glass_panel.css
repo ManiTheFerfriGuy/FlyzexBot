@@ -136,6 +136,12 @@ body {
   display: block;
 }
 
+.item-username {
+  display: block;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
 .item-meta {
   font-size: 0.9rem;
   opacity: 0.9;

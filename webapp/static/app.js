@@ -68,6 +68,15 @@ const loadPendingApplications = async () => {
       title.className = 'item-title';
       title.textContent = `${application.full_name} — ${application.user_id}`;
 
+      const username = document.createElement('span');
+      username.className = 'item-username';
+      if (application.username) {
+        const normalised = application.username.replace(/^@+/, '');
+        username.textContent = `نام کاربری: @${normalised}`;
+      } else {
+        username.textContent = 'نام کاربری: —';
+      }
+
       const answerBlock = document.createElement('div');
       answerBlock.className = 'answer-block';
       const responses = Array.isArray(application.responses) ? application.responses : [];
@@ -104,6 +113,7 @@ const loadPendingApplications = async () => {
       metadata.textContent = parts.join(' | ');
 
       item.appendChild(title);
+      item.appendChild(username);
       item.appendChild(answerBlock);
       if (metadata.textContent) {
         item.appendChild(metadata);

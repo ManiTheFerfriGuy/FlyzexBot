@@ -30,6 +30,7 @@ class ApplicationResponse:
 class Application:
     user_id: int
     full_name: str
+    username: Optional[str]
     answer: Optional[str]
     created_at: str
     language_code: Optional[str] = None
@@ -81,6 +82,7 @@ class StorageState:
             applications[int(key)] = Application(
                 user_id=value["user_id"],
                 full_name=value.get("full_name", ""),
+                username=value.get("username"),
                 answer=value.get("answer"),
                 created_at=value.get("created_at", ""),
                 language_code=value.get("language_code"),
@@ -162,6 +164,7 @@ class Storage:
         self,
         user_id: int,
         full_name: str,
+        username: Optional[str],
         answer: Optional[str],
         language_code: Optional[str] = None,
         responses: Optional[List[ApplicationResponse]] = None,
@@ -173,6 +176,7 @@ class Storage:
             self._state.applications[user_id] = Application(
                 user_id=user_id,
                 full_name=full_name,
+                username=username,
                 answer=answer,
                 created_at=timestamp,
                 language_code=language_code,

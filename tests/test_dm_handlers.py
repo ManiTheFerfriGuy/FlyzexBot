@@ -168,6 +168,7 @@ def test_multi_step_application_flow_collects_responses() -> None:
     storage.add_application.assert_awaited_once()
     call_args = storage.add_application.await_args.kwargs
     assert call_args["user_id"] == user.id
+    assert call_args["username"] == user.username
     assert call_args["language_code"] == context.user_data.get("preferred_language")
     responses = call_args["responses"]
     assert len(responses) == 4
@@ -410,6 +411,7 @@ def test_handle_admin_panel_action_view_applications() -> None:
         Application(
             user_id=101,
             full_name="Tester",
+            username="tester",
             answer="Ready to contribute",
             created_at="2024-06-01T12:00:00",
             language_code="fa",
@@ -539,6 +541,7 @@ def test_admin_handles_note_for_approval() -> None:
     application = Application(
         user_id=42,
         full_name="Tester",
+        username="tester",
         answer="I'd love to help",
         created_at="2024-05-01T12:00:00",
         language_code="en",
@@ -593,6 +596,7 @@ def test_admin_handles_skip_for_denial() -> None:
     application = Application(
         user_id=77,
         full_name="کاربر",
+        username="کاربر77",
         answer="",
         created_at="2024-05-02T12:00:00",
         language_code="fa",

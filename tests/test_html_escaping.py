@@ -66,6 +66,7 @@ async def test_dm_application_rendering_escapes_html() -> None:
     application = Application(
         user_id=42,
         full_name="Eve <Leader>",
+        username="eve<leader>",
         answer="I love & support",
         created_at="2024-01-01T00:00:00",
     )
@@ -82,6 +83,7 @@ async def test_dm_application_rendering_escapes_html() -> None:
     text = chat.messages[0]["text"]
     parse_mode = chat.messages[0]["parse_mode"]
     assert "Eve &lt;Leader&gt;" in text
+    assert "@eve&lt;leader&gt;" in text
     assert "I love &amp; support" in text
     assert parse_mode == ParseMode.HTML
 
