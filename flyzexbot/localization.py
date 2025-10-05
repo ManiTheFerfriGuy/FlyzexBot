@@ -333,6 +333,8 @@ _TEXT_PACKS: Dict[str, TextPack] = {
     "en": ENGLISH_TEXTS,
 }
 
+AVAILABLE_LANGUAGE_CODES = tuple(_TEXT_PACKS.keys())
+
 
 def normalize_language_code(language_code: str | None) -> str | None:
     if not language_code:

@@ -7,8 +7,8 @@ from telegram.constants import ParseMode
 from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
                           MessageHandler, filters)
 
-from ..localization import (PERSIAN_TEXTS, TextPack, get_text_pack,
-                            normalize_language_code)
+from ..localization import (AVAILABLE_LANGUAGE_CODES, PERSIAN_TEXTS, TextPack,
+                            get_text_pack, normalize_language_code)
 from ..services.analytics import AnalyticsTracker, NullAnalytics
 from ..services.security import RateLimitGuard
 from ..services.storage import Application, ApplicationHistoryEntry, Storage
@@ -768,18 +768,28 @@ class DMHandlers:
         language_code: str | None = None,
     ) -> TextPack:
         user_data = getattr(context, "user_data", None)
-        stored_language = None
+        stored_language: str | None = None
+        stored_pack: TextPack | None = None
         if isinstance(user_data, dict):
-            stored_language = user_data.get("preferred_language")
+            maybe_stored = user_data.get("preferred_language")
+            if isinstance(maybe_stored, str):
+                normalised_stored = normalize_language_code(maybe_stored) or maybe_stored
+                if normalised_stored in AVAILABLE_LANGUAGE_CODES:
+                    stored_language = normalised_stored
+                    stored_pack = get_text_pack(stored_language)
+                    if normalised_stored != maybe_stored:
+                        user_data["preferred_language"] = normalised_stored
 
         normalised = normalize_language_code(language_code)
         if normalised:
-            if isinstance(user_data, dict):
+            if stored_pack:
+                return stored_pack
+            if normalised in AVAILABLE_LANGUAGE_CODES and isinstance(user_data, dict):
                 user_data["preferred_language"] = normalised
             return get_text_pack(normalised)
 
-        if isinstance(stored_language, str):
-            return get_text_pack(stored_language)
+        if stored_pack:
+            return stored_pack
 
         return get_text_pack(None)
 
