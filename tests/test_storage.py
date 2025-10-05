@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -10,7 +12,7 @@ import flyzexbot.services.storage as storage_module
 cryptography = pytest.importorskip("cryptography.fernet")
 
 from flyzexbot.services.security import EncryptionManager
-from flyzexbot.services.storage import Storage
+from flyzexbot.services.storage import ApplicationResponse, Storage
 
 
 def test_admin_management(tmp_path: Path) -> None:
@@ -156,3 +158,57 @@ def test_snapshot_write_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         assert not temp_path.exists()
 
     asyncio.run(runner())
+
+
+def test_sqlite_backup(tmp_path: Path) -> None:
+    key = cryptography.Fernet.generate_key()
+    backup_path = tmp_path / "backup.sqlite"
+    storage = Storage(
+        tmp_path / "store.enc",
+        EncryptionManager(key),
+        backup_path=backup_path,
+    )
+
+    async def runner() -> None:
+        await storage.load()
+        await storage.add_admin(1, username="founder", full_name="Founder")
+        await storage.add_application(
+            2,
+            "Applicant",
+            "applicant",
+            "Answer",
+            responses=[
+                ApplicationResponse(
+                    question_id="q1",
+                    question="Why?",
+                    answer="Because",
+                )
+            ],
+            language_code="fa",
+        )
+        await storage.mark_application_status(2, "review", note="Checking", language_code="fa")
+        await storage.add_xp(100, 1, 7)
+        await storage.add_cup(100, "Cup", "Desc", ["A", "B"])
+
+    asyncio.run(runner())
+
+    assert backup_path.exists()
+    connection = sqlite3.connect(backup_path)
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT user_id FROM admins")
+        assert cursor.fetchall() == [(1,)]
+
+        cursor.execute("SELECT COUNT(*) FROM application_responses")
+        assert cursor.fetchone() == (1,)
+
+        cursor.execute("SELECT score FROM xp WHERE chat_id = ? AND user_id = ?", ("100", "1"))
+        assert cursor.fetchone() == (7,)
+
+        cursor.execute("SELECT value FROM metadata WHERE key = 'raw_snapshot'")
+        snapshot_row = cursor.fetchone()
+        assert snapshot_row is not None
+        raw_snapshot = json.loads(snapshot_row[0])
+        assert "2" in raw_snapshot.get("applications", {})
+    finally:
+        connection.close()

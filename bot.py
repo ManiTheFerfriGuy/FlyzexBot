@@ -39,7 +39,11 @@ async def build_application(settings: Settings) -> None:
     await analytics.start()
 
     encryption = EncryptionManager(settings.get_secret_key())
-    storage = Storage(settings.storage.path, encryption)
+    storage = Storage(
+        settings.storage.path,
+        encryption,
+        backup_path=settings.storage.backup_path,
+    )
     await storage.load()
 
     if settings.telegram.owner_id not in storage.list_admins():
