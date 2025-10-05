@@ -94,6 +94,43 @@ body {
   padding: 0.9rem 1rem;
 }
 
+.analytics-card,
+.data-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.analytics-card h3,
+.data-card h3 {
+  margin: 0;
+}
+
+.analytics-card ul,
+.data-card ul {
+  margin: 0.35rem 0 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.answer-block {
+  margin: 0.35rem 0;
+}
+
+.answer-list {
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.answer-list strong {
+  font-weight: 600;
+}
+
 .item-title {
   font-weight: 700;
   display: block;

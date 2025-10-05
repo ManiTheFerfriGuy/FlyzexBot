@@ -32,6 +32,7 @@ def _application_to_dict(application: Application) -> Dict[str, Any]:
         "answer": application.answer,
         "created_at": application.created_at,
         "language_code": application.language_code,
+        "responses": [vars(response) for response in getattr(application, "responses", [])],
     }
 
 
@@ -106,6 +107,21 @@ async def cups(
     effective_limit = limit or settings.cups.leaderboard_size
     cups_payload: List[Dict[str, Any]] = storage.get_cups(chat_id, effective_limit)
     return {"chat_id": chat_id, "limit": effective_limit, "cups": cups_payload}
+
+
+@app.get("/api/applications/insights")
+async def application_insights(storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
+    stats_getter = getattr(storage, "get_application_statistics", None)
+    if callable(stats_getter):
+        return stats_getter()
+    return {
+        "pending": 0,
+        "status_counts": {},
+        "languages": {},
+        "total": 0,
+        "average_pending_answer_length": 0.0,
+        "recent_updates": [],
+    }
 
 
 __all__ = ["app"]

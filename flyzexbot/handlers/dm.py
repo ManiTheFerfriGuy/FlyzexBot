@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from html import escape
 import logging
+from typing import Any, Dict, List
 from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (CallbackQueryHandler, CommandHandler, ContextTypes,
@@ -11,7 +12,12 @@ from ..localization import (AVAILABLE_LANGUAGE_CODES, PERSIAN_TEXTS, TextPack,
                             get_text_pack, normalize_language_code)
 from ..services.analytics import AnalyticsTracker, NullAnalytics
 from ..services.security import RateLimitGuard
-from ..services.storage import Application, ApplicationHistoryEntry, Storage
+from ..services.storage import (
+    Application,
+    ApplicationHistoryEntry,
+    ApplicationResponse,
+    Storage,
+)
 from ..ui.keyboards import (admin_panel_keyboard,
                             application_review_keyboard,
                             glass_dm_welcome_keyboard,
@@ -93,11 +99,14 @@ class DMHandlers:
             await query.edit_message_text(texts.dm_application_duplicate)
             return
 
-        context.user_data["is_filling_application"] = True
+        flow_state = {"step": "role", "answers": []}
+        if isinstance(context.user_data, dict):
+            context.user_data["is_filling_application"] = True
+            context.user_data["application_flow"] = flow_state
         await query.edit_message_text(
             text=texts.dm_application_started,
         )
-        await query.message.chat.send_message(texts.dm_application_question)
+        await query.message.chat.send_message(texts.dm_application_role_prompt)
         return
 
     async def show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -181,6 +190,16 @@ class DMHandlers:
             await self.analytics.record("dm.admin_panel_add_admin")
             return
 
+        if action == "insights":
+            await query.answer()
+            stats_getter = getattr(self.storage, "get_application_statistics", None)
+            if callable(stats_getter) and chat is not None:
+                stats = stats_getter()
+                insights_text = self._render_admin_insights(stats, texts)
+                await chat.send_message(insights_text, parse_mode=ParseMode.HTML)
+            await self.analytics.record("dm.admin_panel_insights")
+            return
+
         if action == "more_tools":
             await query.answer()
             if chat is not None:
@@ -234,6 +253,23 @@ class DMHandlers:
             await update.message.reply_text(texts.dm_rate_limited)
             return
         answer = update.message.text.strip()
+        if not isinstance(context.user_data, dict):
+            return
+
+        flow_state = context.user_data.get("application_flow")
+        if isinstance(flow_state, dict):
+            completed = await self._handle_application_flow_step(
+                update,
+                context,
+                texts,
+                answer,
+                flow_state,
+            )
+            if completed:
+                context.user_data.pop("is_filling_application", None)
+                context.user_data.pop("application_flow", None)
+            return
+
         try:
             async with self.analytics.track_time("dm.application_store"):
                 success = await self.storage.add_application(
@@ -272,6 +308,7 @@ class DMHandlers:
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop("is_filling_application", None)
         context.user_data.pop("pending_admin_action", None)
+        context.user_data.pop("application_flow", None)
         language_code = getattr(update.effective_user, "language_code", None)
         texts = self._get_texts(context, language_code)
         if update.message:
@@ -343,6 +380,7 @@ class DMHandlers:
             "chat_id": message.chat_id,
             "message_id": message.message_id,
             "full_name": application.full_name,
+            "language_code": application.language_code,
         }
 
         await message.edit_text(
@@ -377,7 +415,12 @@ class DMHandlers:
 
         try:
             status = "approved" if action == "approve" else "denied"
-            await self.storage.mark_application_status(target_id, status, note=note_to_store)
+            await self.storage.mark_application_status(
+                target_id,
+                status,
+                note=note_to_store,
+                language_code=pending_note.get("language_code"),
+            )
 
             applicant_message = (
                 applicant_texts.dm_application_approved_user
@@ -557,6 +600,7 @@ class DMHandlers:
         texts = self._get_texts(context, getattr(user, "language_code", None))
         success = await self.storage.withdraw_application(user.id)
         context.user_data.pop("is_filling_application", None)
+        context.user_data.pop("application_flow", None)
         if success:
             await chat.send_message(texts.dm_withdraw_success)
             await self.analytics.record("dm.withdraw_completed")
@@ -578,6 +622,7 @@ class DMHandlers:
         texts = self._get_texts(context, getattr(user, "language_code", None))
         success = await self.storage.withdraw_application(user.id)
         context.user_data.pop("is_filling_application", None)
+        context.user_data.pop("application_flow", None)
         if success:
             await message.chat.send_message(texts.dm_withdraw_success)
             await self.analytics.record("dm.withdraw_completed")
@@ -718,13 +763,12 @@ class DMHandlers:
 
     def _format_application_entry(self, application: Application, texts: TextPack) -> str:
         full_name = escape(str(application.full_name))
-        raw_answer = application.answer if application.answer else "—"
-        answer = escape(str(raw_answer))
+        answers_block = self._format_application_answers(application, texts)
         created_at = escape(str(application.created_at))
         return texts.dm_application_item.format(
             full_name=full_name,
             user_id=application.user_id,
-            answer=answer,
+            answers=answers_block,
             created_at=created_at,
         )
 
@@ -792,4 +836,239 @@ class DMHandlers:
             return stored_pack
 
         return get_text_pack(None)
+
+    async def _handle_application_flow_step(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        texts: TextPack,
+        answer: str,
+        flow_state: dict,
+    ) -> bool:
+        message = update.message
+        if message is None:
+            return False
+
+        step = flow_state.get("step")
+        responses = flow_state.setdefault("answers", [])
+
+        if step == "role":
+            match = self._match_role(answer, texts)
+            if not match:
+                await message.reply_text(
+                    texts.dm_application_invalid_choice.format(
+                        options=", ".join(self._role_labels(texts))
+                    )
+                )
+                return False
+
+            role_key, provided_answer = match
+            responses.append(
+                {
+                    "question_id": "role",
+                    "question": texts.dm_application_role_prompt,
+                    "answer": provided_answer,
+                }
+            )
+            flow_state["role_key"] = role_key
+            prompt = texts.dm_application_followup_prompts.get(role_key)
+            if prompt:
+                flow_state["step"] = "followup"
+                await message.reply_text(prompt)
+            else:
+                flow_state["step"] = "goals"
+                await message.reply_text(texts.dm_application_goals_prompt)
+            return False
+
+        if step == "followup":
+            role_key = flow_state.get("role_key")
+            question = texts.dm_application_followup_prompts.get(role_key, "")
+            if question:
+                responses.append(
+                    {
+                        "question_id": f"followup_{role_key}",
+                        "question": question,
+                        "answer": answer,
+                    }
+                )
+            flow_state["step"] = "goals"
+            await message.reply_text(texts.dm_application_goals_prompt)
+            return False
+
+        if step == "goals":
+            responses.append(
+                {
+                    "question_id": "goals",
+                    "question": texts.dm_application_goals_prompt,
+                    "answer": answer,
+                }
+            )
+
+            flow_state["step"] = "availability"
+            await message.reply_text(texts.dm_application_availability_prompt)
+            return False
+
+        if step == "availability":
+            responses.append(
+                {
+                    "question_id": "availability",
+                    "question": texts.dm_application_availability_prompt,
+                    "answer": answer,
+                }
+            )
+
+            application_responses = [
+                ApplicationResponse(
+                    question_id=item["question_id"],
+                    question=item["question"],
+                    answer=item["answer"],
+                )
+                for item in responses
+            ]
+            summary_text = self._format_application_summary(application_responses, texts)
+            aggregated_answer = self._collapse_responses(application_responses)
+
+            user = update.effective_user
+            if user is None:
+                return False
+
+            try:
+                async with self.analytics.track_time("dm.application_store"):
+                    success = await self.storage.add_application(
+                        user_id=user.id,
+                        full_name=user.full_name or user.username or str(user.id),
+                        answer=aggregated_answer,
+                        language_code=context.user_data.get("preferred_language"),
+                        responses=application_responses,
+                    )
+            except Exception as exc:
+                LOGGER.error("Failed to persist application for %s: %s", user.id, exc)
+                await self.analytics.record("dm.application_error")
+                await message.reply_text(texts.error_generic)
+                return True
+
+            if not success:
+                LOGGER.warning("Duplicate application prevented for user %s", user.id)
+                await message.reply_text(texts.dm_application_duplicate)
+                return True
+
+            await message.reply_text(summary_text, parse_mode=ParseMode.HTML)
+            await message.reply_text(texts.dm_application_received)
+            await self.analytics.record("dm.application_submitted")
+
+            review_chat_id = context.bot_data.get("review_chat_id")
+            if review_chat_id and context.application:
+                context.application.create_task(
+                    context.bot.send_message(
+                        chat_id=review_chat_id,
+                        text=self._render_application_text(user.id),
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=application_review_keyboard(user.id, PERSIAN_TEXTS),
+                    )
+                )
+            return True
+
+        await message.reply_text(texts.error_generic)
+        return True
+
+    def _role_labels(self, texts: TextPack) -> List[str]:
+        labels: List[str] = []
+        for synonyms in texts.dm_application_role_options.values():
+            if synonyms:
+                labels.append(synonyms[0])
+        return labels
+
+    def _match_role(self, answer: str, texts: TextPack) -> tuple[str, str] | None:
+        normalized = answer.casefold()
+        for role, synonyms in texts.dm_application_role_options.items():
+            for synonym in synonyms:
+                if normalized == synonym.casefold():
+                    return role, synonym
+        return None
+
+    def _format_application_answers(self, application: Application, texts: TextPack) -> str:
+        if application.responses:
+            lines = [
+                texts.dm_application_summary_item.format(
+                    question=escape(response.question),
+                    answer=escape(response.answer) if response.answer else "—",
+                )
+                for response in application.responses
+            ]
+            return "\n".join(lines)
+
+        raw_answer = application.answer if application.answer else "—"
+        return escape(str(raw_answer))
+
+    def _format_application_summary(
+        self, responses: List[ApplicationResponse], texts: TextPack
+    ) -> str:
+        lines = [texts.dm_application_summary_title]
+        for response in responses:
+            lines.append(
+                texts.dm_application_summary_item.format(
+                    question=escape(response.question),
+                    answer=escape(response.answer) if response.answer else "—",
+                )
+            )
+        return "\n".join(lines)
+
+    def _collapse_responses(self, responses: List[ApplicationResponse]) -> str:
+        return "\n".join(
+            f"{response.question.strip()} {response.answer.strip()}".strip()
+            for response in responses
+        )
+
+    def _render_admin_insights(self, stats: Dict[str, Any], texts: TextPack) -> str:
+        pending = int(stats.get("pending", 0))
+        status_counts = stats.get("status_counts", {}) or {}
+        approved = int(status_counts.get("approved", 0))
+        denied = int(status_counts.get("denied", 0))
+        withdrawn = int(status_counts.get("withdrawn", 0))
+        total = int(stats.get("total", 0))
+        average_length = float(stats.get("average_pending_answer_length", 0.0))
+
+        counts_block = texts.dm_admin_panel_insights_counts.format(
+            pending=pending,
+            approved=approved,
+            denied=denied,
+            withdrawn=withdrawn,
+            total=total,
+            average_length=average_length,
+        )
+
+        languages = stats.get("languages", {}) or {}
+        if languages:
+            language_lines = [
+                f"• {escape(str(code))}: {count}"
+                for code, count in sorted(languages.items(), key=lambda item: (-int(item[1]), str(item[0])))
+            ]
+            languages_block = texts.dm_admin_panel_insights_languages.format(
+                languages="\n".join(language_lines)
+            )
+        else:
+            languages_block = texts.dm_admin_panel_insights_languages_empty
+
+        recent_updates = stats.get("recent_updates", []) or []
+        if recent_updates:
+            recent_lines = []
+            for entry in recent_updates:
+                user_id = escape(str(entry.get("user_id", "—")))
+                status = escape(str(entry.get("status", "")))
+                updated_at = escape(str(entry.get("updated_at", "")))
+                recent_lines.append(f"• <code>{user_id}</code> – {status} ({updated_at})")
+            recent_block = texts.dm_admin_panel_insights_recent.format(
+                items="\n".join(recent_lines)
+            )
+        else:
+            recent_block = texts.dm_admin_panel_insights_recent_empty
+
+        return "\n".join(
+            [
+                texts.dm_admin_panel_insights_title,
+                counts_block,
+                languages_block,
+                recent_block,
+            ]
+        )
 

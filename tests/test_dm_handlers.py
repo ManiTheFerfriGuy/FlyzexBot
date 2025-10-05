@@ -33,7 +33,7 @@ class DummyIncomingMessage:
         self.text = text
         self.replies: list[str] = []
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text: str, **kwargs: object) -> None:  # noqa: ARG002
         self.replies.append(text)
 
 
@@ -50,6 +50,8 @@ class DummyUser:
     def __init__(self, user_id: int, language_code: str = "fa") -> None:
         self.id = user_id
         self.language_code = language_code
+        self.full_name = f"User {user_id}"
+        self.username = f"user{user_id}"
 
 
 class DummyContext:
@@ -85,7 +87,7 @@ def test_handle_apply_allows_admins_to_start_application() -> None:
     query.answer.assert_awaited()
     query.edit_message_text.assert_awaited_once_with(text=PERSIAN_TEXTS.dm_application_started)
     assert context.user_data.get("is_filling_application") is True
-    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_application_question
+    assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_application_role_prompt
 
 
 def test_handle_apply_prevents_duplicate_for_admin() -> None:
@@ -106,6 +108,75 @@ def test_handle_apply_prevents_duplicate_for_admin() -> None:
     query.edit_message_text.assert_awaited_once_with(PERSIAN_TEXTS.dm_application_duplicate)
     assert "is_filling_application" not in context.user_data
     assert chat.messages == []
+
+
+def test_multi_step_application_flow_collects_responses() -> None:
+    storage = SimpleNamespace(
+        has_application=lambda _: False,
+        add_application=AsyncMock(return_value=True),
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(20, language_code="en")
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_apply_callback(update, context))
+
+    assert context.user_data.get("application_flow") == {"step": "role", "answers": []}
+
+    first_message = DummyIncomingMessage("Trader")
+    first_update = SimpleNamespace(
+        message=first_message,
+        effective_user=user,
+        effective_chat=chat,
+    )
+
+    asyncio.run(handler.receive_application(first_update, context))
+    assert first_message.replies[-1] == ENGLISH_TEXTS.dm_application_followup_prompts["trader"]
+
+    second_message = DummyIncomingMessage("Market making")
+    second_update = SimpleNamespace(
+        message=second_message,
+        effective_user=user,
+        effective_chat=chat,
+    )
+
+    asyncio.run(handler.receive_application(second_update, context))
+    assert second_message.replies[-1] == ENGLISH_TEXTS.dm_application_goals_prompt
+
+    third_message = DummyIncomingMessage("Build a stronger economy")
+    third_update = SimpleNamespace(
+        message=third_message,
+        effective_user=user,
+        effective_chat=chat,
+    )
+
+    asyncio.run(handler.receive_application(third_update, context))
+    assert third_message.replies[-1] == ENGLISH_TEXTS.dm_application_availability_prompt
+
+    fourth_message = DummyIncomingMessage("Evenings and weekends")
+    fourth_update = SimpleNamespace(
+        message=fourth_message,
+        effective_user=user,
+        effective_chat=chat,
+    )
+
+    asyncio.run(handler.receive_application(fourth_update, context))
+
+    storage.add_application.assert_awaited_once()
+    call_args = storage.add_application.await_args.kwargs
+    assert call_args["user_id"] == user.id
+    assert call_args["language_code"] == context.user_data.get("preferred_language")
+    responses = call_args["responses"]
+    assert len(responses) == 4
+    summary_reply = fourth_message.replies[-2]
+    assert ENGLISH_TEXTS.dm_application_summary_title in summary_reply
+    assert "Market making" in summary_reply
+    assert "Build a stronger economy" in summary_reply
+    assert "Evenings and weekends" in summary_reply
+    assert "application_flow" not in context.user_data
 
 
 def test_glass_dm_welcome_keyboard_includes_webapp_button_when_configured() -> None:
@@ -503,7 +574,10 @@ def test_admin_handles_note_for_approval() -> None:
 
     storage.pop_application.assert_awaited_once_with(application.user_id)
     storage.mark_application_status.assert_awaited_once_with(
-        application.user_id, "approved", note="Welcome to the team!"
+        application.user_id,
+        "approved",
+        note="Welcome to the team!",
+        language_code=application.language_code,
     )
     send_kwargs = context.bot.send_message.await_args.kwargs
     assert send_kwargs["chat_id"] == application.user_id
@@ -548,7 +622,10 @@ def test_admin_handles_skip_for_denial() -> None:
     asyncio.run(handler.receive_application(update_note, context))
 
     storage.mark_application_status.assert_awaited_once_with(
-        application.user_id, "denied", note=None
+        application.user_id,
+        "denied",
+        note=None,
+        language_code=application.language_code,
     )
     send_kwargs = context.bot.send_message.await_args.kwargs
     assert send_kwargs["chat_id"] == application.user_id

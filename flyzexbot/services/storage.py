@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,12 +20,20 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
+class ApplicationResponse:
+    question_id: str
+    question: str
+    answer: str
+
+
+@dataclass
 class Application:
     user_id: int
     full_name: str
-    answer: str
+    answer: Optional[str]
     created_at: str
     language_code: Optional[str] = None
+    responses: List[ApplicationResponse] = field(default_factory=list)
 
 
 @dataclass
@@ -32,6 +41,7 @@ class ApplicationHistoryEntry:
     status: str
     updated_at: str
     note: Optional[str] = None
+    language_code: Optional[str] = None
 
 
 @dataclass
@@ -46,7 +56,11 @@ class StorageState:
         return {
             "admins": self.admins,
             "applications": {
-                str(k): vars(v) for k, v in self.applications.items()
+                str(k): {
+                    **vars(v),
+                    "responses": [vars(response) for response in v.responses],
+                }
+                for k, v in self.applications.items()
             },
             "application_history": {
                 str(k): vars(v) for k, v in self.application_history.items()
@@ -57,13 +71,30 @@ class StorageState:
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "StorageState":
-        applications = {
-            int(k): Application(**v) for k, v in payload.get("applications", {}).items()
-        }
-        application_history = {
-            int(k): ApplicationHistoryEntry(**v)
-            for k, v in payload.get("application_history", {}).items()
-        }
+        applications = {}
+        for key, value in payload.get("applications", {}).items():
+            responses_payload = [
+                ApplicationResponse(**response)
+                for response in value.get("responses", [])
+                if {"question_id", "question", "answer"}.issubset(response.keys())
+            ]
+            applications[int(key)] = Application(
+                user_id=value["user_id"],
+                full_name=value.get("full_name", ""),
+                answer=value.get("answer"),
+                created_at=value.get("created_at", ""),
+                language_code=value.get("language_code"),
+                responses=responses_payload,
+            )
+
+        application_history = {}
+        for key, value in payload.get("application_history", {}).items():
+            application_history[int(key)] = ApplicationHistoryEntry(
+                status=value.get("status", ""),
+                updated_at=value.get("updated_at", ""),
+                note=value.get("note"),
+                language_code=value.get("language_code"),
+            )
         return cls(
             admins=list(payload.get("admins", [])),
             applications=applications,
@@ -131,8 +162,9 @@ class Storage:
         self,
         user_id: int,
         full_name: str,
-        answer: str,
+        answer: Optional[str],
         language_code: Optional[str] = None,
+        responses: Optional[List[ApplicationResponse]] = None,
     ) -> bool:
         async with self._lock:
             if user_id in self._state.applications:
@@ -144,10 +176,12 @@ class Storage:
                 answer=answer,
                 created_at=timestamp,
                 language_code=language_code,
+                responses=list(responses or []),
             )
             self._state.application_history[user_id] = ApplicationHistoryEntry(
                 status="pending",
                 updated_at=timestamp,
+                language_code=language_code,
             )
         await self.save()
         LOGGER.info("application_added", extra={"user_id": user_id})
@@ -178,18 +212,28 @@ class Storage:
             self._state.application_history[user_id] = ApplicationHistoryEntry(
                 status="withdrawn",
                 updated_at=timestamp,
+                language_code=getattr(application, "language_code", None),
             )
         await self.save()
         LOGGER.info("application_withdrawn", extra={"user_id": user_id})
         return True
 
-    async def mark_application_status(self, user_id: int, status: str, note: Optional[str] = None) -> None:
+    async def mark_application_status(
+        self,
+        user_id: int,
+        status: str,
+        note: Optional[str] = None,
+        language_code: Optional[str] = None,
+    ) -> None:
         async with self._lock:
             timestamp = datetime.now(timezone.utc).isoformat()
+            previous = self._state.application_history.get(user_id)
+            language = language_code or getattr(previous, "language_code", None)
             self._state.application_history[user_id] = ApplicationHistoryEntry(
                 status=status,
                 updated_at=timestamp,
                 note=note,
+                language_code=language,
             )
         await self.save()
         LOGGER.info("application_status_updated", extra={"user_id": user_id, "status": status})
@@ -203,6 +247,49 @@ class Storage:
             for user_id, history in self._state.application_history.items()
             if history.status == status
         ]
+
+    def get_application_statistics(self) -> Dict[str, Any]:
+        history = list(self._state.application_history.items())
+        status_counter = Counter(entry.status for _, entry in history)
+        language_counter = Counter(
+            (entry.language_code or "unknown") for _, entry in history if entry.language_code
+        )
+        for application in self._state.applications.values():
+            code = application.language_code or "unknown"
+            language_counter[code] += 1
+
+        pending_lengths = [
+            sum(len(response.answer) for response in application.responses)
+            or len(application.answer or "")
+            for application in self._state.applications.values()
+        ]
+        average_response_length = (
+            sum(pending_lengths) / len(pending_lengths)
+            if pending_lengths
+            else 0
+        )
+
+        recent_updates = sorted(
+            history,
+            key=lambda item: getattr(item[1], "updated_at", ""),
+            reverse=True,
+        )[:5]
+
+        return {
+            "total": len(history),
+            "pending": len(self._state.applications),
+            "status_counts": dict(status_counter),
+            "languages": dict(language_counter),
+            "average_pending_answer_length": average_response_length,
+            "recent_updates": [
+                {
+                    "user_id": user_id,
+                    "status": entry.status,
+                    "updated_at": entry.updated_at,
+                }
+                for user_id, entry in recent_updates
+            ],
+        }
 
     async def add_xp(self, chat_id: int, user_id: int, amount: int) -> int:
         async with self._lock:
