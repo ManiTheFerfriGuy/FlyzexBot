@@ -16,6 +16,7 @@ class TextPack:
     dm_application_question: str
     dm_application_received: str
     dm_application_duplicate: str
+    dm_application_already_member: str
     dm_application_role_prompt: str
     dm_application_role_options: Dict[str, List[str]]
     dm_application_followup_prompts: Dict[str, str]
@@ -126,6 +127,9 @@ PERSIAN_TEXTS = TextPack(
     ),
     dm_application_duplicate=(
         "ℹ️ درخواست شما قبلاً ثبت شده و در حال بررسی است."
+    ),
+    dm_application_already_member=(
+        "ℹ️ شما هم‌اکنون عضو گیلد هستید و نیازی به ثبت درخواست جدید نیست."
     ),
     dm_application_role_prompt="۱️⃣ نقش مورد علاقه‌تان در گیلد چیست؟ (تاجر، مبارز، کاوشگر، پشتیبان)",
     dm_application_role_options={
@@ -290,6 +294,9 @@ ENGLISH_TEXTS = TextPack(
     ),
     dm_application_duplicate=(
         "ℹ️ Your application is already on file and is being reviewed."
+    ),
+    dm_application_already_member=(
+        "ℹ️ You're already a guild member—no need to submit another application."
     ),
     dm_application_role_prompt="1️⃣ Which role fits you best in the guild? (Trader, Fighter, Explorer, Support)",
     dm_application_role_options={

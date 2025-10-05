@@ -95,6 +95,10 @@ class DMHandlers:
 
         texts = self._get_texts(context, getattr(user, "language_code", None))
         await self.analytics.record("dm.apply_requested")
+        status_entry = self._get_application_status(user.id)
+        if status_entry and getattr(status_entry, "status", "").casefold() == "approved":
+            await query.edit_message_text(texts.dm_application_already_member)
+            return
         if self.storage.has_application(user.id):
             await query.edit_message_text(texts.dm_application_duplicate)
             return
@@ -300,6 +304,12 @@ class DMHandlers:
             return
 
         texts = self._get_texts(context, getattr(user, "language_code", None))
+        status_entry = self._get_application_status(user.id)
+        if status_entry and getattr(status_entry, "status", "").casefold() == "approved":
+            await update.message.reply_text(texts.dm_application_already_member)
+            context.user_data.pop("is_filling_application", None)
+            context.user_data.pop("application_flow", None)
+            return
         if not await self.rate_limiter.is_allowed(user.id):
             await self.analytics.record("dm.rate_limited")
             await update.message.reply_text(texts.dm_rate_limited)
@@ -876,6 +886,12 @@ class DMHandlers:
         if callable(checker):
             return bool(checker(user_id))
         return False
+
+    def _get_application_status(self, user_id: int) -> ApplicationHistoryEntry | None:
+        getter = getattr(self.storage, "get_application_status", None)
+        if callable(getter):
+            return getter(user_id)
+        return None
 
     def _get_webapp_url(self, context: ContextTypes.DEFAULT_TYPE) -> str | None:
         bot_data = getattr(context, "bot_data", None)
