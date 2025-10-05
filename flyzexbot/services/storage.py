@@ -19,6 +19,41 @@ from .security import EncryptionManager
 LOGGER = logging.getLogger(__name__)
 
 
+def format_timestamp(dt: Optional[datetime] = None) -> str:
+    """Return a compact, human-friendly UTC timestamp."""
+
+    moment = dt or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    moment = moment.astimezone(timezone.utc)
+
+    date_part = moment.strftime("%Y/%m/%d · %H:%M:%S")
+    offset = moment.utcoffset()
+    if not offset:
+        return f"{date_part} UTC"
+
+    total_minutes = int(offset.total_seconds() // 60)
+    sign = "+" if total_minutes >= 0 else "-"
+    hours, minutes = divmod(abs(total_minutes), 60)
+    return f"{date_part} UTC{sign}{hours:02d}:{minutes:02d}"
+
+
+def normalize_timestamp(value: str) -> str:
+    """Convert legacy ISO timestamps to the modern display format."""
+
+    if not value:
+        return ""
+
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return format_timestamp(parsed)
+
+
 @dataclass
 class ApplicationResponse:
     question_id: str
@@ -84,7 +119,7 @@ class StorageState:
                 full_name=value.get("full_name", ""),
                 username=value.get("username"),
                 answer=value.get("answer"),
-                created_at=value.get("created_at", ""),
+                created_at=normalize_timestamp(value.get("created_at", "")),
                 language_code=value.get("language_code"),
                 responses=responses_payload,
             )
@@ -93,7 +128,7 @@ class StorageState:
         for key, value in payload.get("application_history", {}).items():
             application_history[int(key)] = ApplicationHistoryEntry(
                 status=value.get("status", ""),
-                updated_at=value.get("updated_at", ""),
+                updated_at=normalize_timestamp(value.get("updated_at", "")),
                 note=value.get("note"),
                 language_code=value.get("language_code"),
             )
@@ -102,7 +137,16 @@ class StorageState:
             applications=applications,
             application_history=application_history,
             xp={k: {user: int(score) for user, score in v.items()} for k, v in payload.get("xp", {}).items()},
-            cups={k: list(v) for k, v in payload.get("cups", {}).items()},
+            cups={
+                k: [
+                    {
+                        **entry,
+                        "created_at": normalize_timestamp(entry.get("created_at", "")),
+                    }
+                    for entry in v
+                ]
+                for k, v in payload.get("cups", {}).items()
+            },
         )
 
 
@@ -172,7 +216,7 @@ class Storage:
         async with self._lock:
             if user_id in self._state.applications:
                 return False
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = format_timestamp()
             self._state.applications[user_id] = Application(
                 user_id=user_id,
                 full_name=full_name,
@@ -212,7 +256,7 @@ class Storage:
             application = self._state.applications.pop(user_id, None)
             if not application:
                 return False
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = format_timestamp()
             self._state.application_history[user_id] = ApplicationHistoryEntry(
                 status="withdrawn",
                 updated_at=timestamp,
@@ -230,7 +274,7 @@ class Storage:
         language_code: Optional[str] = None,
     ) -> None:
         async with self._lock:
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = format_timestamp()
             previous = self._state.application_history.get(user_id)
             language = language_code or getattr(previous, "language_code", None)
             self._state.application_history[user_id] = ApplicationHistoryEntry(
@@ -320,7 +364,7 @@ class Storage:
                     "title": title,
                     "description": description,
                     "podium": podium,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": format_timestamp(),
                 }
             )
         await self.save()

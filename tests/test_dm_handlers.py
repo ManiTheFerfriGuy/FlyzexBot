@@ -1,13 +1,28 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from flyzexbot.handlers.dm import DMHandlers
 from flyzexbot.localization import ENGLISH_TEXTS, PERSIAN_TEXTS
-from flyzexbot.services.storage import Application, ApplicationHistoryEntry
+from flyzexbot.services.storage import (
+    Application,
+    ApplicationHistoryEntry,
+    format_timestamp,
+)
 from flyzexbot.ui.keyboards import admin_panel_keyboard, glass_dm_welcome_keyboard
+
+
+def build_ts(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> str:
+    return format_timestamp(datetime(year, month, day, hour, minute, tzinfo=timezone.utc))
+
+
+MODERN_TS = build_ts(2024, 6, 1, 12, 0)
+NEW_YEAR_TS = build_ts(2024, 1, 1)
+MAY_ONE_TS = build_ts(2024, 5, 1, 12, 0)
+MAY_TWO_TS = build_ts(2024, 5, 2, 12, 0)
 
 
 class DummyChat:
@@ -376,7 +391,7 @@ def test_status_without_history() -> None:
 
 
 def test_status_with_pending_history() -> None:
-    history_entry = ApplicationHistoryEntry(status="pending", updated_at="2024-01-01T00:00:00", note=None)
+    history_entry = ApplicationHistoryEntry(status="pending", updated_at=NEW_YEAR_TS, note=None)
     storage = SimpleNamespace(get_application_status=lambda _: history_entry)
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
@@ -391,7 +406,7 @@ def test_status_with_pending_history() -> None:
 
 
 def test_status_with_approved_history_english() -> None:
-    history_entry = ApplicationHistoryEntry(status="approved", updated_at="2024-01-01T00:00:00", note=None)
+    history_entry = ApplicationHistoryEntry(status="approved", updated_at=NEW_YEAR_TS, note=None)
     storage = SimpleNamespace(get_application_status=lambda _: history_entry)
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
@@ -413,7 +428,7 @@ def test_handle_admin_panel_action_view_applications() -> None:
             full_name="Tester",
             username="tester",
             answer="Ready to contribute",
-            created_at="2024-06-01T12:00:00",
+            created_at=MODERN_TS,
             language_code="fa",
         )
     ]
@@ -437,7 +452,7 @@ def test_handle_admin_panel_action_view_applications() -> None:
 
 
 def test_handle_admin_panel_action_view_members() -> None:
-    history_entry = ApplicationHistoryEntry(status="approved", updated_at="2024-06-01T12:00:00", note=None)
+    history_entry = ApplicationHistoryEntry(status="approved", updated_at=MODERN_TS, note=None)
     storage = SimpleNamespace(
         is_admin=lambda _: True,
         get_pending_applications=lambda: [],
@@ -543,7 +558,7 @@ def test_admin_handles_note_for_approval() -> None:
         full_name="Tester",
         username="tester",
         answer="I'd love to help",
-        created_at="2024-05-01T12:00:00",
+        created_at=MAY_ONE_TS,
         language_code="en",
     )
     storage = SimpleNamespace(
@@ -598,7 +613,7 @@ def test_admin_handles_skip_for_denial() -> None:
         full_name="کاربر",
         username="کاربر77",
         answer="",
-        created_at="2024-05-02T12:00:00",
+        created_at=MAY_TWO_TS,
         language_code="fa",
     )
     storage = SimpleNamespace(

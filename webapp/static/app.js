@@ -38,14 +38,17 @@ const setActiveView = (viewId) => {
 
 const formatDateTime = (value) => {
   if (!value) return '';
-  try {
-    return new Intl.DateTimeFormat('fa-IR', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  } catch (error) {
-    return value;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    try {
+      return new Intl.DateTimeFormat('fa-IR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(value));
+    } catch (error) {
+      return value;
+    }
   }
+  return value;
 };
 
 const loadPendingApplications = async () => {
