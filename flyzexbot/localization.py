@@ -79,6 +79,7 @@ class TextPack:
     dm_admin_panel_view_applications_button: str
     dm_admin_panel_view_members_button: str
     dm_admin_panel_manage_admins_button: str
+    dm_admin_panel_manage_questions_button: str
     dm_admin_panel_more_tools_button: str
     dm_admin_panel_insights_button: str
     dm_admin_panel_back_button: str
@@ -97,6 +98,19 @@ class TextPack:
     dm_admin_panel_add_admin_prompt: str
     dm_admin_panel_more_tools_text: str
     dm_admin_panel_more_tools_no_webapp: str
+    dm_admin_questions_menu_title: str
+    dm_admin_questions_menu_intro: str
+    dm_admin_questions_role_label: str
+    dm_admin_questions_goals_label: str
+    dm_admin_questions_availability_label: str
+    dm_admin_questions_followup_label_template: str
+    dm_admin_questions_prompt: str
+    dm_admin_questions_reset_keyword: str
+    dm_admin_questions_reset_hint: str
+    dm_admin_questions_success: str
+    dm_admin_questions_reset_success: str
+    dm_admin_questions_cancelled: str
+    dm_admin_questions_back_button: str
     dm_admin_panel_insights_title: str
     dm_admin_panel_insights_counts: str
     dm_admin_panel_insights_languages: str
@@ -230,6 +244,7 @@ PERSIAN_TEXTS = TextPack(
     dm_admin_panel_view_applications_button="مشاهده درخواست‌ها",
     dm_admin_panel_view_members_button="اعضای تایید‌شده",
     dm_admin_panel_manage_admins_button="مدیریت ادمین‌ها",
+    dm_admin_panel_manage_questions_button="مدیریت سوال‌ها",
     dm_admin_panel_more_tools_button="ابزارهای بیشتر",
     dm_admin_panel_insights_button="گزارش‌ها و تحلیل‌ها",
     dm_admin_panel_back_button="بازگشت به خانه",
@@ -253,6 +268,26 @@ PERSIAN_TEXTS = TextPack(
     dm_admin_panel_more_tools_no_webapp=(
         "ℹ️ هنوز وب‌اپ معرفی نشده است. در فایل پیکربندی مقدار webapp_url را تنظیم کنید."
     ),
+    dm_admin_questions_menu_title="<b>مدیریت سوال‌های فرم ({language})</b>",
+    dm_admin_questions_menu_intro=(
+        "یکی از سوال‌ها را برای ویرایش انتخاب کنید.\n"
+        "برای بازگرداندن مقدار پیش‌فرض، هنگام ویرایش کلمه «{reset_keyword}» را ارسال کنید."
+    ),
+    dm_admin_questions_role_label="سوال نقش (مرحله ۱)",
+    dm_admin_questions_goals_label="سوال اهداف (مرحله ۳)",
+    dm_admin_questions_availability_label="سوال زمان‌بندی (مرحله ۴)",
+    dm_admin_questions_followup_label_template="سوال پیگیری ({role})",
+    dm_admin_questions_prompt=(
+        "متن جدید برای «{label}» را بفرستید.\n"
+        "برای بازنشانی به متن پیش‌فرض، عبارت «{reset_keyword}» را ارسال کنید.\n\n"
+        "متن فعلی:\n{current}"
+    ),
+    dm_admin_questions_reset_keyword="پیشفرض",
+    dm_admin_questions_reset_hint="ارسال کلمه «{reset_keyword}» سوال را به حالت اولیه بازمی‌گرداند.",
+    dm_admin_questions_success="سوال «{label}» به‌روزرسانی شد.",
+    dm_admin_questions_reset_success="سوال «{label}» به مقدار پیش‌فرض بازنشانی شد.",
+    dm_admin_questions_cancelled="ویرایش سوال لغو شد.",
+    dm_admin_questions_back_button="بازگشت",
     dm_admin_panel_insights_title="<b>📊 داشبورد مدیریتی</b>",
     dm_admin_panel_insights_counts=(
         "• در انتظار بررسی: {pending}\n"
@@ -397,6 +432,7 @@ ENGLISH_TEXTS = TextPack(
     dm_admin_panel_view_applications_button="View applications",
     dm_admin_panel_view_members_button="Approved members",
     dm_admin_panel_manage_admins_button="Manage admins",
+    dm_admin_panel_manage_questions_button="Manage questions",
     dm_admin_panel_more_tools_button="More tools",
     dm_admin_panel_insights_button="Analytics & reports",
     dm_admin_panel_back_button="Back to welcome",
@@ -423,6 +459,26 @@ ENGLISH_TEXTS = TextPack(
     dm_admin_panel_more_tools_no_webapp=(
         "ℹ️ Configure webapp_url in settings.yaml to enable the web dashboard."
     ),
+    dm_admin_questions_menu_title="<b>Manage application questions ({language})</b>",
+    dm_admin_questions_menu_intro=(
+        "Choose a question to update.\n"
+        "Send “{reset_keyword}” while editing to restore the default text."
+    ),
+    dm_admin_questions_role_label="Role question (step 1)",
+    dm_admin_questions_goals_label="Goals question (step 3)",
+    dm_admin_questions_availability_label="Availability question (step 4)",
+    dm_admin_questions_followup_label_template="Follow-up question ({role})",
+    dm_admin_questions_prompt=(
+        "Send the new text for “{label}”.\n"
+        "Send “{reset_keyword}” to restore the default text.\n\n"
+        "Current text:\n{current}"
+    ),
+    dm_admin_questions_reset_keyword="reset",
+    dm_admin_questions_reset_hint="Sending “{reset_keyword}” will restore this question to its default text.",
+    dm_admin_questions_success="“{label}” has been updated.",
+    dm_admin_questions_reset_success="“{label}” has been restored to the default text.",
+    dm_admin_questions_cancelled="Question editing cancelled.",
+    dm_admin_questions_back_button="Back",
     dm_admin_panel_insights_title="<b>📊 Admin dashboard</b>",
     dm_admin_panel_insights_counts=(
         "• Pending review: {pending}\n"

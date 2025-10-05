@@ -19,6 +19,7 @@ from ..services.storage import (
     Storage,
 )
 from ..ui.keyboards import (admin_management_keyboard, admin_panel_keyboard,
+                            admin_questions_keyboard,
                             application_review_keyboard,
                             glass_dm_welcome_keyboard,
                             language_options_keyboard)
@@ -103,14 +104,29 @@ class DMHandlers:
             await query.edit_message_text(texts.dm_application_duplicate)
             return
 
-        flow_state = {"step": "role", "answers": []}
+        active_language = self._get_active_language_code(
+            context,
+            getattr(user, "language_code", None),
+        )
+        flow_state = {
+            "step": "role",
+            "answers": [],
+            "language_code": active_language,
+        }
         if isinstance(context.user_data, dict):
             context.user_data["is_filling_application"] = True
             context.user_data["application_flow"] = flow_state
         await query.edit_message_text(
             text=texts.dm_application_started,
         )
-        await query.message.chat.send_message(texts.dm_application_role_prompt)
+        chat = query.message.chat if query.message else None
+        if chat is not None:
+            role_prompt = self._resolve_question_prompt(
+                "role_prompt",
+                texts,
+                active_language,
+            )
+            await chat.send_message(role_prompt)
         return
 
     async def show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -241,6 +257,76 @@ class DMHandlers:
                 await self.analytics.record("dm.admin_panel_manage_admins_back")
                 return
 
+        if action.startswith("manage_questions"):
+            await query.answer()
+            sub_action = ""
+            if ":" in action:
+                _, sub_action = action.split(":", 1)
+
+            active_language = self._get_active_language_code(
+                context,
+                getattr(user, "language_code", None),
+            )
+            language_label = self._get_language_label(texts, active_language)
+
+            if sub_action == "" or sub_action == "menu":
+                intro = texts.dm_admin_questions_menu_intro.format(
+                    reset_keyword=texts.dm_admin_questions_reset_keyword
+                )
+                menu_text = (
+                    f"{texts.dm_admin_questions_menu_title.format(language=language_label)}"
+                    f"\n\n{intro}"
+                )
+                await query.edit_message_text(
+                    text=menu_text,
+                    reply_markup=admin_questions_keyboard(texts),
+                    parse_mode=ParseMode.HTML,
+                )
+                await self.analytics.record("dm.admin_panel_manage_questions_opened")
+                return
+
+            if sub_action == "back":
+                await query.edit_message_text(
+                    text=self._build_admin_panel_text(texts),
+                    reply_markup=admin_panel_keyboard(
+                        texts,
+                        self._get_webapp_url(context),
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
+                await self.analytics.record("dm.admin_panel_manage_questions_back")
+                return
+
+            question_id = sub_action
+            if sub_action.startswith("followup:"):
+                _, role_key = sub_action.split(":", 1)
+                question_id = f"followup_{role_key}"
+
+            label = self._get_question_label(question_id, texts)
+            current_prompt = self._resolve_question_prompt(
+                question_id,
+                texts,
+                active_language,
+            )
+            prompt_text = texts.dm_admin_questions_prompt.format(
+                label=label,
+                reset_keyword=texts.dm_admin_questions_reset_keyword,
+                current=current_prompt or "—",
+            )
+
+            if isinstance(context.user_data, dict):
+                context.user_data["pending_question_edit"] = {
+                    "question_id": question_id,
+                    "language_code": active_language,
+                    "label": label,
+                }
+
+            if chat is not None:
+                await chat.send_message(prompt_text)
+
+            await self.analytics.record("dm.admin_panel_manage_questions_prompt")
+            return
+
         if action == "insights":
             await query.answer()
             stats_getter = getattr(self.storage, "get_application_statistics", None)
@@ -287,6 +373,15 @@ class DMHandlers:
             await self._process_admin_note_response(update, context)
             return
 
+        pending_question = (
+            context.user_data.get("pending_question_edit")
+            if isinstance(context.user_data, dict)
+            else None
+        )
+        if pending_question:
+            await self._process_question_edit_response(update, context)
+            return
+
         if isinstance(context.user_data, dict):
             pending_action = context.user_data.get("pending_admin_action")
             if pending_action == "promote":
@@ -320,12 +415,20 @@ class DMHandlers:
 
         flow_state = context.user_data.get("application_flow")
         if isinstance(flow_state, dict):
+            language_code = flow_state.get("language_code")
+            if language_code is None:
+                language_code = self._get_active_language_code(
+                    context,
+                    getattr(user, "language_code", None),
+                )
+                flow_state["language_code"] = language_code
             completed = await self._handle_application_flow_step(
                 update,
                 context,
                 texts,
                 answer,
                 flow_state,
+                language_code,
             )
             if completed:
                 context.user_data.pop("is_filling_application", None)
@@ -372,6 +475,7 @@ class DMHandlers:
         context.user_data.pop("is_filling_application", None)
         context.user_data.pop("pending_admin_action", None)
         context.user_data.pop("application_flow", None)
+        context.user_data.pop("pending_question_edit", None)
         language_code = getattr(update.effective_user, "language_code", None)
         texts = self._get_texts(context, language_code)
         if update.message:
@@ -525,6 +629,63 @@ class DMHandlers:
             await self.analytics.record(analytics_event)
         finally:
             context.user_data.pop("pending_review_note", None)
+
+    async def _process_question_edit_response(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> None:
+        message = update.message
+        user = update.effective_user
+        if message is None or user is None:
+            return
+
+        if not isinstance(context.user_data, dict):
+            return
+
+        pending = context.user_data.get("pending_question_edit")
+        texts = self._get_texts(context, getattr(user, "language_code", None))
+        if not isinstance(pending, dict):
+            await message.reply_text(texts.dm_admin_questions_cancelled)
+            context.user_data.pop("pending_question_edit", None)
+            return
+
+        question_id = pending.get("question_id")
+        language_code = pending.get("language_code")
+        label = pending.get("label") or self._get_question_label(
+            str(question_id),
+            texts,
+        )
+
+        payload = (message.text or "").strip()
+        if not question_id or not payload:
+            await message.reply_text(texts.dm_admin_questions_cancelled)
+            context.user_data.pop("pending_question_edit", None)
+            return
+
+        reset_keyword = texts.dm_admin_questions_reset_keyword.casefold()
+        try:
+            if payload.casefold() == reset_keyword:
+                await self.storage.set_application_question(
+                    question_id,
+                    None,
+                    language_code=language_code,
+                )
+                await message.reply_text(
+                    texts.dm_admin_questions_reset_success.format(label=label)
+                )
+            else:
+                await self.storage.set_application_question(
+                    question_id,
+                    payload,
+                    language_code=language_code,
+                )
+                await message.reply_text(
+                    texts.dm_admin_questions_success.format(label=label)
+                )
+            await self.analytics.record("dm.admin_panel_manage_questions_saved")
+        finally:
+            context.user_data.pop("pending_question_edit", None)
 
     async def _process_admin_promote_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message = update.message
@@ -992,6 +1153,90 @@ class DMHandlers:
 
         return get_text_pack(None)
 
+    def _get_active_language_code(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        language_code: str | None = None,
+    ) -> str | None:
+        stored: str | None = None
+        if isinstance(context.user_data, dict):
+            maybe_stored = context.user_data.get("preferred_language")
+            if isinstance(maybe_stored, str):
+                stored = normalize_language_code(maybe_stored) or maybe_stored
+
+        requested = normalize_language_code(language_code) if language_code else None
+        return stored or requested
+
+    def _get_language_label(self, texts: TextPack, language_code: str | None) -> str:
+        language_names = getattr(texts, "language_names", {})
+        if language_code and language_code in language_names:
+            return language_names[language_code]
+        if language_code:
+            return language_code
+        if language_names:
+            return next(iter(language_names.values()))
+        return "—"
+
+    def _get_question_overrides(self, language_code: str | None) -> Dict[str, str]:
+        getter = getattr(self.storage, "get_application_questions", None)
+        if not callable(getter):
+            return {}
+        try:
+            overrides = getter(language_code)
+        except TypeError:
+            overrides = getter()  # type: ignore[misc]
+        except Exception:  # pragma: no cover - defensive logging
+            LOGGER.exception("Failed to load question overrides")
+            return {}
+        if not isinstance(overrides, dict):
+            return {}
+        return {
+            str(question_id): str(prompt)
+            for question_id, prompt in overrides.items()
+            if isinstance(question_id, str) and isinstance(prompt, str)
+        }
+
+    def _resolve_question_prompt(
+        self,
+        question_id: str,
+        texts: TextPack,
+        language_code: str | None,
+    ) -> str:
+        overrides = self._get_question_overrides(language_code)
+        prompt = overrides.get(question_id)
+        if prompt:
+            return prompt
+
+        if question_id == "role_prompt":
+            return texts.dm_application_role_prompt
+        if question_id == "goals_prompt":
+            return texts.dm_application_goals_prompt
+        if question_id == "availability_prompt":
+            return texts.dm_application_availability_prompt
+        if question_id.startswith("followup_"):
+            role_key = question_id.split("_", 1)[1]
+            return texts.dm_application_followup_prompts.get(role_key, "")
+        return ""
+
+    def _get_question_label(self, question_id: str, texts: TextPack) -> str:
+        if question_id == "role_prompt":
+            return texts.dm_admin_questions_role_label
+        if question_id == "goals_prompt":
+            return texts.dm_admin_questions_goals_label
+        if question_id == "availability_prompt":
+            return texts.dm_admin_questions_availability_label
+        if question_id.startswith("followup_"):
+            role_key = question_id.split("_", 1)[1]
+            template = getattr(
+                texts,
+                "dm_admin_questions_followup_label_template",
+                "{role}",
+            )
+            options = texts.dm_application_role_options.get(role_key, [])
+            role_label = options[0] if options else role_key
+            return template.format(role=role_label)
+        return question_id
+
     async def _handle_application_flow_step(
         self,
         update: Update,
@@ -999,6 +1244,7 @@ class DMHandlers:
         texts: TextPack,
         answer: str,
         flow_state: dict,
+        language_code: str | None,
     ) -> bool:
         message = update.message
         if message is None:
@@ -1018,26 +1264,44 @@ class DMHandlers:
                 return False
 
             role_key, provided_answer = match
+            role_prompt = self._resolve_question_prompt(
+                "role_prompt",
+                texts,
+                language_code,
+            )
             responses.append(
                 {
                     "question_id": "role",
-                    "question": texts.dm_application_role_prompt,
+                    "question": role_prompt,
                     "answer": provided_answer,
                 }
             )
             flow_state["role_key"] = role_key
-            prompt = texts.dm_application_followup_prompts.get(role_key)
+            prompt = self._resolve_question_prompt(
+                f"followup_{role_key}",
+                texts,
+                language_code,
+            )
             if prompt:
                 flow_state["step"] = "followup"
                 await message.reply_text(prompt)
             else:
                 flow_state["step"] = "goals"
-                await message.reply_text(texts.dm_application_goals_prompt)
+                goals_prompt = self._resolve_question_prompt(
+                    "goals_prompt",
+                    texts,
+                    language_code,
+                )
+                await message.reply_text(goals_prompt)
             return False
 
         if step == "followup":
             role_key = flow_state.get("role_key")
-            question = texts.dm_application_followup_prompts.get(role_key, "")
+            question = self._resolve_question_prompt(
+                f"followup_{role_key}",
+                texts,
+                language_code,
+            )
             if question:
                 responses.append(
                     {
@@ -1047,27 +1311,47 @@ class DMHandlers:
                     }
                 )
             flow_state["step"] = "goals"
-            await message.reply_text(texts.dm_application_goals_prompt)
+            goals_prompt = self._resolve_question_prompt(
+                "goals_prompt",
+                texts,
+                language_code,
+            )
+            await message.reply_text(goals_prompt)
             return False
 
         if step == "goals":
+            goals_prompt = self._resolve_question_prompt(
+                "goals_prompt",
+                texts,
+                language_code,
+            )
             responses.append(
                 {
                     "question_id": "goals",
-                    "question": texts.dm_application_goals_prompt,
+                    "question": goals_prompt,
                     "answer": answer,
                 }
             )
 
             flow_state["step"] = "availability"
-            await message.reply_text(texts.dm_application_availability_prompt)
+            availability_prompt = self._resolve_question_prompt(
+                "availability_prompt",
+                texts,
+                language_code,
+            )
+            await message.reply_text(availability_prompt)
             return False
 
         if step == "availability":
+            availability_prompt = self._resolve_question_prompt(
+                "availability_prompt",
+                texts,
+                language_code,
+            )
             responses.append(
                 {
                     "question_id": "availability",
-                    "question": texts.dm_application_availability_prompt,
+                    "question": availability_prompt,
                     "answer": answer,
                 }
             )

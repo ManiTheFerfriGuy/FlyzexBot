@@ -108,6 +108,40 @@ def test_xp_and_cups(tmp_path: Path) -> None:
     asyncio.run(runner())
 
 
+def test_application_question_overrides(tmp_path: Path) -> None:
+    key = cryptography.Fernet.generate_key()
+    storage = Storage(tmp_path / "store.enc", EncryptionManager(key))
+
+    async def runner() -> None:
+        await storage.load()
+
+        assert storage.get_application_questions("fa") == {}
+
+        await storage.set_application_question(
+            "role_prompt",
+            "Custom role?",
+            language_code="fa",
+        )
+        prompts_fa = storage.get_application_questions("fa")
+        assert prompts_fa["role_prompt"] == "Custom role?"
+
+        await storage.set_application_question("goals_prompt", "Shared goals")
+        prompts_default = storage.get_application_questions("fa")
+        assert prompts_default["goals_prompt"] == "Shared goals"
+        prompts_en = storage.get_application_questions("en")
+        assert prompts_en["goals_prompt"] == "Shared goals"
+
+        await storage.set_application_question(
+            "role_prompt",
+            None,
+            language_code="fa",
+        )
+        prompts_after_reset = storage.get_application_questions("fa")
+        assert "role_prompt" not in prompts_after_reset
+
+    asyncio.run(runner())
+
+
 def test_snapshot_write_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     key = cryptography.Fernet.generate_key()
     storage = Storage(tmp_path / "store.enc", EncryptionManager(key))
@@ -189,6 +223,11 @@ def test_sqlite_backup(tmp_path: Path) -> None:
         await storage.mark_application_status(2, "review", note="Checking", language_code="fa")
         await storage.add_xp(100, 1, 7)
         await storage.add_cup(100, "Cup", "Desc", ["A", "B"])
+        await storage.set_application_question(
+            "role_prompt",
+            "Custom role?",
+            language_code="fa",
+        )
 
     asyncio.run(runner())
 
@@ -204,6 +243,12 @@ def test_sqlite_backup(tmp_path: Path) -> None:
 
         cursor.execute("SELECT score FROM xp WHERE chat_id = ? AND user_id = ?", ("100", "1"))
         assert cursor.fetchone() == (7,)
+
+        cursor.execute(
+            "SELECT prompt FROM application_questions WHERE language_code = ? AND question_id = ?",
+            ("fa", "role_prompt"),
+        )
+        assert cursor.fetchone() == ("Custom role?",)
 
         cursor.execute("SELECT value FROM metadata WHERE key = 'raw_snapshot'")
         snapshot_row = cursor.fetchone()

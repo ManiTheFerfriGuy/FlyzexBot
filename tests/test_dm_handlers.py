@@ -157,6 +157,7 @@ def test_multi_step_application_flow_collects_responses() -> None:
         has_application=lambda _: False,
         add_application=AsyncMock(return_value=True),
         get_application_status=lambda _: None,
+        get_application_questions=lambda _=None: {},
     )
     handler = DMHandlers(storage=storage, owner_id=1)
     chat = DummyChat()
@@ -167,7 +168,11 @@ def test_multi_step_application_flow_collects_responses() -> None:
 
     asyncio.run(handler.handle_apply_callback(update, context))
 
-    assert context.user_data.get("application_flow") == {"step": "role", "answers": []}
+    assert context.user_data.get("application_flow") == {
+        "step": "role",
+        "answers": [],
+        "language_code": "en",
+    }
 
     first_message = DummyIncomingMessage("Trader")
     first_update = SimpleNamespace(
@@ -223,6 +228,27 @@ def test_multi_step_application_flow_collects_responses() -> None:
     assert "application_flow" not in context.user_data
 
 
+def test_application_flow_respects_question_override() -> None:
+    override_prompt = "Custom role?"
+    storage = SimpleNamespace(
+        has_application=lambda _: False,
+        add_application=AsyncMock(return_value=True),
+        get_application_status=lambda _: None,
+        get_application_questions=lambda _=None: {"role_prompt": override_prompt},
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(25, language_code="en")
+    query = DummyCallbackQuery(user, chat)
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_apply_callback(update, context))
+
+    assert chat.messages
+    assert chat.messages[-1]["text"] == override_prompt
+
+
 def test_glass_dm_welcome_keyboard_includes_webapp_button_when_configured() -> None:
     url = "https://example.com/panel"
     markup = glass_dm_welcome_keyboard(PERSIAN_TEXTS, webapp_url=url)
@@ -250,6 +276,48 @@ def test_admin_panel_keyboard_includes_manage_admins_button() -> None:
         getattr(button, "callback_data", "") == "admin_panel:manage_admins"
         for button in buttons
     )
+
+
+def test_admin_panel_keyboard_includes_manage_questions_button() -> None:
+    markup = admin_panel_keyboard(PERSIAN_TEXTS)
+    buttons = _flatten_keyboard(markup)
+    assert any(
+        getattr(button, "callback_data", "") == "admin_panel:manage_questions"
+        for button in buttons
+    )
+
+
+def test_manage_questions_sets_pending_state() -> None:
+    storage = SimpleNamespace(
+        is_admin=lambda _: True,
+        get_application_questions=lambda _=None: {},
+        set_application_question=AsyncMock(),
+    )
+    handler = DMHandlers(storage=storage, owner_id=1)
+    chat = DummyChat()
+    user = DummyUser(30)
+    query = DummyCallbackQuery(user, chat, data="admin_panel:manage_questions")
+    update = SimpleNamespace(callback_query=query)
+    context = DummyContext([])
+
+    asyncio.run(handler.handle_admin_panel_action(update, context))
+
+    query.edit_message_text.assert_awaited()
+
+    query_followup = DummyCallbackQuery(
+        user,
+        chat,
+        data="admin_panel:manage_questions:role_prompt",
+    )
+    update_followup = SimpleNamespace(callback_query=query_followup)
+
+    asyncio.run(handler.handle_admin_panel_action(update_followup, context))
+
+    pending = context.user_data.get("pending_question_edit")
+    assert isinstance(pending, dict)
+    assert pending.get("question_id") == "role_prompt"
+    assert chat.messages
+    assert "متن جدید" in chat.messages[-1]["text"]
 
 
 def test_glass_dm_welcome_keyboard_hides_admin_button_for_regular_users() -> None:
@@ -700,6 +768,68 @@ def test_receive_application_demote_admin_flow() -> None:
     storage.remove_admin.assert_awaited_once_with(321)
     assert context.user_data.get("pending_admin_action") is None
     assert chat.messages and chat.messages[-1]["text"] == PERSIAN_TEXTS.dm_admin_removed.format(user_id=321)
+
+
+def test_process_question_edit_response_updates_storage() -> None:
+    set_question = AsyncMock()
+    storage = SimpleNamespace(set_application_question=set_question)
+    handler = DMHandlers(storage=storage, owner_id=1)
+    context = DummyContext([])
+    context.user_data["pending_question_edit"] = {
+        "question_id": "goals_prompt",
+        "language_code": "en",
+        "label": ENGLISH_TEXTS.dm_admin_questions_goals_label,
+    }
+
+    message = DummyIncomingMessage("Reach new heights")
+    update = SimpleNamespace(
+        message=message,
+        effective_user=DummyUser(50, language_code="en"),
+    )
+
+    asyncio.run(handler._process_question_edit_response(update, context))
+
+    set_question.assert_awaited_once_with(
+        "goals_prompt",
+        "Reach new heights",
+        language_code="en",
+    )
+    assert not context.user_data.get("pending_question_edit")
+    assert message.replies
+    assert ENGLISH_TEXTS.dm_admin_questions_success.format(
+        label=ENGLISH_TEXTS.dm_admin_questions_goals_label
+    ) in message.replies[-1]
+
+
+def test_process_question_edit_response_allows_reset() -> None:
+    set_question = AsyncMock()
+    storage = SimpleNamespace(set_application_question=set_question)
+    handler = DMHandlers(storage=storage, owner_id=1)
+    context = DummyContext([])
+    context.user_data["pending_question_edit"] = {
+        "question_id": "availability_prompt",
+        "language_code": None,
+        "label": PERSIAN_TEXTS.dm_admin_questions_availability_label,
+    }
+
+    message = DummyIncomingMessage(PERSIAN_TEXTS.dm_admin_questions_reset_keyword)
+    update = SimpleNamespace(
+        message=message,
+        effective_user=DummyUser(60, language_code="fa"),
+    )
+
+    asyncio.run(handler._process_question_edit_response(update, context))
+
+    set_question.assert_awaited_once_with(
+        "availability_prompt",
+        None,
+        language_code=None,
+    )
+    assert "pending_question_edit" not in context.user_data
+    assert message.replies
+    assert PERSIAN_TEXTS.dm_admin_questions_reset_success.format(
+        label=PERSIAN_TEXTS.dm_admin_questions_availability_label
+    ) in message.replies[-1]
 
 
 def test_admin_handles_note_for_approval() -> None:
