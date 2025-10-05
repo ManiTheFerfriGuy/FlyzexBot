@@ -139,6 +139,7 @@ PERSIAN_TEXTS = TextPack(
     dm_no_pending="درخواستی برای بررسی وجود ندارد.",
     dm_application_item=(
         "<b>کاربر:</b> {full_name} ({user_id})\n"
+        "<b>نام کاربری:</b> {username}\n"
         "<b>پاسخ‌ها:</b>\n{answers}\n"
         "<b>زمان:</b> {created_at}"
     ),
@@ -292,6 +293,7 @@ ENGLISH_TEXTS = TextPack(
     dm_no_pending="There are no applications to review.",
     dm_application_item=(
         "<b>Applicant:</b> {full_name} ({user_id})\n"
+        "<b>Username:</b> {username}\n"
         "<b>Answers:</b>\n{answers}\n"
         "<b>Submitted:</b> {created_at}"
     ),

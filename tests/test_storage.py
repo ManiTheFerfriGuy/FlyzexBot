@@ -38,7 +38,7 @@ def test_application_flow(tmp_path: Path) -> None:
     async def runner() -> None:
         await storage.load()
 
-        added = await storage.add_application(10, "User", "Answer")
+        added = await storage.add_application(10, "User", None, "Answer")
         assert added
         assert storage.has_application(10)
         application = storage.get_application(10)
@@ -56,7 +56,7 @@ def test_application_flow(tmp_path: Path) -> None:
         assert status_after_withdraw.language_code is None
         assert not storage.has_application(10)
 
-        added_again = await storage.add_application(11, "User", "Answer 2")
+        added_again = await storage.add_application(11, "User", None, "Answer 2")
         assert added_again
         popped = await storage.pop_application(11)
         assert popped is not None
@@ -65,7 +65,7 @@ def test_application_flow(tmp_path: Path) -> None:
         assert status_after_review is not None
         assert status_after_review.status == "approved"
 
-        added_with_language = await storage.add_application(12, "User", "Answer 3", language_code="en")
+        added_with_language = await storage.add_application(12, "User", None, "Answer 3", language_code="en")
         assert added_with_language
         application_with_language = storage.get_application(12)
         assert application_with_language is not None

@@ -275,6 +275,7 @@ class DMHandlers:
                 success = await self.storage.add_application(
                     user_id=user.id,
                     full_name=user.full_name or user.username or str(user.id),
+                    username=getattr(user, "username", None),
                     answer=answer,
                     language_code=context.user_data.get("preferred_language"),
                 )
@@ -763,10 +764,18 @@ class DMHandlers:
 
     def _format_application_entry(self, application: Application, texts: TextPack) -> str:
         full_name = escape(str(application.full_name))
+        username = application.username
+        if username:
+            username = username.lstrip("@")
+            username_display = f"@{username}" if username else "—"
+        else:
+            username_display = "—"
+        username_escaped = escape(username_display)
         answers_block = self._format_application_answers(application, texts)
         created_at = escape(str(application.created_at))
         return texts.dm_application_item.format(
             full_name=full_name,
+            username=username_escaped,
             user_id=application.user_id,
             answers=answers_block,
             created_at=created_at,
@@ -937,6 +946,7 @@ class DMHandlers:
                     success = await self.storage.add_application(
                         user_id=user.id,
                         full_name=user.full_name or user.username or str(user.id),
+                        username=getattr(user, "username", None),
                         answer=aggregated_answer,
                         language_code=context.user_data.get("preferred_language"),
                         responses=application_responses,

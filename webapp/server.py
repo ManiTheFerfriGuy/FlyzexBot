@@ -29,6 +29,7 @@ def _application_to_dict(application: Application) -> Dict[str, Any]:
     return {
         "user_id": application.user_id,
         "full_name": application.full_name,
+        "username": application.username,
         "answer": application.answer,
         "created_at": application.created_at,
         "language_code": application.language_code,
