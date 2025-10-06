@@ -3,131 +3,352 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FlyzexBot Glass Panel</title>
+    <title>FlyzexBot Control Center</title>
     <link rel="stylesheet" href="static/glass_panel.css" />
   </head>
   <body>
-    <section class="glass-panel">
-      <h1>🪟 پنل شیشه‌ای فلیزکس</h1>
-      <p>
-        این رابط برای ربات تلگرامی FlyzexBot طراحی شده است تا حس مدرن و شفافیت را به کاربران منتقل کند.
-        می‌توانید این صفحه را در یک WebApp تلگرام یا وب‌سایت جانبی میزبانی کنید.
-      </p>
-      <div class="button-grid">
-        <button type="button" data-view="overview" class="active">درخواست عضویت</button>
-        <button type="button" data-view="pending">بررسی درخواست‌ها</button>
-        <button type="button" data-view="admins">مدیریت ادمین‌ها</button>
-        <button type="button" data-view="xp">نمایش لیدربورد XP</button>
-        <button type="button" data-view="cups">نمایش جام‌ها</button>
-        <button type="button" data-view="analytics">گزارش مدیریتی</button>
-      </div>
-      <div id="view-container">
-        <section id="view-overview" class="view active">
-          <h2>چطور درخواست عضویت ثبت کنیم؟</h2>
-          <p>
-            کافی است در تلگرام دستور <code>/start</code> را برای ربات ارسال کنید تا فرم درخواست باز شود.
-            پس از ثبت درخواست، تیم مدیریت می‌تواند در همین پنل وضعیت آن را مشاهده و بررسی کند.
-          </p>
-        </section>
-        <section id="view-pending" class="view">
-          <h2>درخواست‌های در انتظار بررسی</h2>
-          <p id="pending-status" class="status">برای مشاهده داده‌ها روی دکمه بالا کلیک کنید.</p>
-          <ul id="pending-list" class="data-list" aria-live="polite"></ul>
-        </section>
-        <section id="view-admins" class="view">
-          <h2>مدیریت ادمین‌ها</h2>
-          <div class="admin-actions">
-            <form id="admin-add-form" class="inline-form card-form">
-              <h3>افزودن ادمین جدید</h3>
-              <label for="admin-add-user-id">شناسه کاربری (User ID)
-                <input
-                  id="admin-add-user-id"
-                  name="user_id"
-                  type="number"
-                  inputmode="numeric"
-                  required
-                  placeholder="مثال: 123456789"
-                />
-              </label>
-              <label for="admin-add-username">نام کاربری تلگرام (اختیاری)
-                <input
-                  id="admin-add-username"
-                  name="username"
-                  type="text"
-                  inputmode="text"
-                  placeholder="مثال: @flyzex"
-                />
-              </label>
-              <label for="admin-add-full-name">نام نمایشی (اختیاری)
-                <input
-                  id="admin-add-full-name"
-                  name="full_name"
-                  type="text"
-                  inputmode="text"
-                  placeholder="مثال: تیم مدیریت"
-                />
-              </label>
-              <button type="submit">افزودن</button>
-              <p id="admin-add-status" class="form-status" aria-live="polite">
-                برای افزودن ادمین شناسه کاربری را وارد کنید.
-              </p>
-            </form>
-            <form id="admin-remove-form" class="inline-form card-form">
-              <h3>حذف ادمین موجود</h3>
-              <label for="admin-remove-user-id">شناسه کاربری (User ID)
-                <input
-                  id="admin-remove-user-id"
-                  name="user_id"
-                  type="number"
-                  inputmode="numeric"
-                  required
-                  placeholder="مثال: 123456789"
-                />
-              </label>
-              <button type="submit">حذف</button>
-              <p id="admin-remove-status" class="form-status" aria-live="polite">
-                شناسه ادمین مورد نظر را برای حذف وارد کنید.
-              </p>
-            </form>
+    <div class="app-background">
+      <div class="app-shell" role="application">
+        <aside class="sidebar" aria-label="پیمایش اصلی">
+          <div class="brand">
+            <span class="brand-logo" aria-hidden="true">🪟</span>
+            <div>
+              <h1>کنترل‌پنل فلیزکس</h1>
+              <p>هماهنگ‌سازی اعضا و مسابقات در یک نگاه</p>
+            </div>
           </div>
-          <p id="admins-status" class="status" aria-live="polite">فهرست ادمین‌های ثبت شده در این بخش نمایش داده می‌شود.</p>
-          <ul id="admins-list" class="data-list" aria-live="polite"></ul>
-        </section>
-        <section id="view-xp" class="view">
-          <h2>لیدربورد تجربه (XP)</h2>
-          <form id="xp-form" class="inline-form">
-            <label for="xp-chat-id">شناسه چت (Chat ID)
-              <input id="xp-chat-id" name="chat_id" type="number" inputmode="numeric" required />
-            </label>
-            <label for="xp-limit">حداکثر تعداد افراد
-              <input id="xp-limit" name="limit" type="number" min="1" placeholder="پیش‌فرض پیکربندی" />
-            </label>
-            <button type="submit">بارگذاری لیدربورد</button>
-          </form>
-          <p id="xp-status" class="status">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
-          <ol id="xp-list" class="data-list" aria-live="polite"></ol>
-        </section>
-        <section id="view-cups" class="view">
-          <h2>آرشیو جام‌ها</h2>
-          <form id="cups-form" class="inline-form">
-            <label for="cups-chat-id">شناسه چت (Chat ID)
-              <input id="cups-chat-id" name="chat_id" type="number" inputmode="numeric" required />
-            </label>
-            <label for="cups-limit">حداکثر تعداد جام‌ها
-              <input id="cups-limit" name="limit" type="number" min="1" placeholder="پیش‌فرض پیکربندی" />
-            </label>
-            <button type="submit">نمایش جام‌ها</button>
-          </form>
-          <p id="cups-status" class="status">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
-          <div id="cups-list" aria-live="polite"></div>
-        </section>
-        <section id="view-analytics" class="view">
-          <h2>گزارش لحظه‌ای</h2>
-          <p id="analytics-status" class="status">برای مشاهده آمار دکمه گزارش مدیریتی را انتخاب کنید.</p>
-          <div id="analytics-content" class="analytics-card" aria-live="polite"></div>
-        </section>
+          <nav class="nav-groups">
+            <div class="nav-group">
+              <p class="nav-group-title">نما</p>
+              <button type="button" data-route="dashboard" class="nav-item active">
+                <span>داشبورد</span>
+              </button>
+            </div>
+            <div class="nav-group">
+              <p class="nav-group-title">اعضا</p>
+              <button type="button" data-route="applications" class="nav-item">
+                <span>درخواست‌های عضویت</span>
+              </button>
+            </div>
+            <div class="nav-group">
+              <p class="nav-group-title">مسابقات</p>
+              <button type="button" data-route="competitions" class="nav-item">
+                <span>لیدربورد و جام‌ها</span>
+              </button>
+            </div>
+            <div class="nav-group">
+              <p class="nav-group-title">آمار</p>
+              <button type="button" data-route="analytics" class="nav-item">
+                <span>گزارش مدیریتی</span>
+              </button>
+            </div>
+            <div class="nav-group">
+              <p class="nav-group-title">مدیریت</p>
+              <button
+                type="button"
+                data-route="admin"
+                id="admin-nav-button"
+                class="nav-item"
+                aria-controls="route-admin"
+              >
+                <span>پنل ادمین</span>
+              </button>
+            </div>
+          </nav>
+          <footer class="sidebar-footer">
+            <p>برای بهترین عملکرد این پنل را در نسخه به‌روز مرورگر یا وب‌اپ تلگرام باز کنید.</p>
+          </footer>
+        </aside>
+
+        <main class="main-content" aria-live="polite">
+          <header class="page-header">
+            <div>
+              <p id="page-subtitle" class="page-subtitle">دید کلی از وضعیت ربات</p>
+              <h2 id="page-title" class="page-title">داشبورد لحظه‌ای</h2>
+            </div>
+            <div class="page-actions">
+              <button type="button" class="pill-button" data-route-target="applications">
+                بررسی درخواست‌ها
+              </button>
+              <button type="button" class="pill-button" data-route-target="competitions">
+                شروع مسابقه جدید
+              </button>
+            </div>
+          </header>
+
+          <section id="route-dashboard" class="route active" tabindex="-1">
+            <div class="grid responsive-grid">
+              <article class="data-card">
+                <header class="card-header">
+                  <h3>وضعیت درخواست‌ها</h3>
+                  <button type="button" class="icon-button" id="dashboard-refresh" aria-label="به‌روزرسانی آمار">
+                    ⟳
+                  </button>
+                </header>
+                <dl class="stat-list">
+                  <div>
+                    <dt>در انتظار بررسی</dt>
+                    <dd id="dashboard-pending-count">—</dd>
+                  </div>
+                  <div>
+                    <dt>تأیید شده</dt>
+                    <dd id="dashboard-approved-count">—</dd>
+                  </div>
+                  <div>
+                    <dt>رد شده</dt>
+                    <dd id="dashboard-denied-count">—</dd>
+                  </div>
+                  <div>
+                    <dt>مجموع درخواست‌ها</dt>
+                    <dd id="dashboard-total-count">—</dd>
+                  </div>
+                  <div>
+                    <dt>میانگین طول پاسخ در انتظار</dt>
+                    <dd id="dashboard-answer-length">—</dd>
+                  </div>
+                </dl>
+                <p id="dashboard-status" class="status-text">
+                  برای مشاهده آخرین داده‌ها روی دکمه به‌روزرسانی کلیک کنید.
+                </p>
+              </article>
+
+              <article class="data-card">
+                <header class="card-header">
+                  <h3>آخرین فعالیت‌ها</h3>
+                </header>
+                <ul id="dashboard-recent-list" class="timeline-list" aria-live="polite"></ul>
+                <p id="dashboard-recent-empty" class="status-text">
+                  فعلاً گزارشی ثبت نشده است.
+                </p>
+              </article>
+            </div>
+
+            <article class="data-card highlight">
+              <header class="card-header">
+                <h3>میان‌برهای عملیاتی</h3>
+              </header>
+              <div class="quick-actions">
+                <button type="button" class="quick-action" data-route-target="applications">
+                  <span class="quick-action-icon" aria-hidden="true">✅</span>
+                  <span>
+                    <strong>بررسی درخواست‌های جدید</strong>
+                    <small>وضعیت متقاضیان را تأیید یا رد کنید.</small>
+                  </span>
+                </button>
+                <button type="button" class="quick-action" data-route-target="competitions">
+                  <span class="quick-action-icon" aria-hidden="true">🏆</span>
+                  <span>
+                    <strong>مدیریت لیگ و جام‌ها</strong>
+                    <small>لیدربورد XP و جام‌ها را به‌روز نگه دارید.</small>
+                  </span>
+                </button>
+                <button type="button" class="quick-action" data-route-target="analytics">
+                  <span class="quick-action-icon" aria-hidden="true">📊</span>
+                  <span>
+                    <strong>تحلیل روند فعالیت</strong>
+                    <small>تصمیم‌گیری بر اساس آمار آنی.</small>
+                  </span>
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section id="route-applications" class="route" tabindex="-1" hidden>
+            <div class="section-heading">
+              <div>
+                <h3>درخواست‌های در انتظار</h3>
+                <p>با بررسی درخواست‌ها اعضای تازه را به جامعه خود اضافه کنید.</p>
+              </div>
+              <button type="button" id="applications-refresh" class="pill-button">
+                به‌روزرسانی لیست
+              </button>
+            </div>
+            <p id="pending-status" class="status-text">
+              برای مشاهده داده‌ها لیست را به‌روزرسانی کنید.
+            </p>
+            <ul id="pending-list" class="item-list" aria-live="polite"></ul>
+          </section>
+
+          <section id="route-competitions" class="route" tabindex="-1" hidden>
+            <div class="section-heading">
+              <div>
+                <h3>مدیریت مسابقات و لیدربورد</h3>
+                <p>با چند کلیک وضعیت امتیازدهی و جام‌ها را به‌روزرسانی کنید.</p>
+              </div>
+            </div>
+            <div class="grid responsive-grid">
+              <article class="data-card">
+                <header class="card-header">
+                  <h3>لیدربورد XP</h3>
+                </header>
+                <form id="xp-form" class="stacked-form">
+                  <label for="xp-chat-id">شناسه چت (Chat ID)</label>
+                  <input
+                    id="xp-chat-id"
+                    name="chat_id"
+                    type="number"
+                    inputmode="numeric"
+                    required
+                    placeholder="مثال: -100123456"
+                  />
+                  <label for="xp-limit">حداکثر تعداد افراد</label>
+                  <input
+                    id="xp-limit"
+                    name="limit"
+                    type="number"
+                    min="1"
+                    placeholder="پیش‌فرض پیکربندی"
+                  />
+                  <button type="submit" class="primary-button">نمایش لیدربورد</button>
+                </form>
+                <p id="xp-status" class="status-text">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
+                <ol id="xp-list" class="item-list" aria-live="polite"></ol>
+              </article>
+
+              <article class="data-card">
+                <header class="card-header">
+                  <h3>آرشیو جام‌ها</h3>
+                </header>
+                <form id="cups-form" class="stacked-form">
+                  <label for="cups-chat-id">شناسه چت (Chat ID)</label>
+                  <input
+                    id="cups-chat-id"
+                    name="chat_id"
+                    type="number"
+                    inputmode="numeric"
+                    required
+                    placeholder="مثال: -100123456"
+                  />
+                  <label for="cups-limit">حداکثر تعداد جام‌ها</label>
+                  <input
+                    id="cups-limit"
+                    name="limit"
+                    type="number"
+                    min="1"
+                    placeholder="پیش‌فرض پیکربندی"
+                  />
+                  <button type="submit" class="primary-button">نمایش جام‌ها</button>
+                </form>
+                <p id="cups-status" class="status-text">شناسه چت را وارد کرده و فرم را ارسال کنید.</p>
+                <div id="cups-list" class="item-list" aria-live="polite"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="route-analytics" class="route" tabindex="-1" hidden>
+            <div class="section-heading">
+              <div>
+                <h3>گزارش مدیریتی</h3>
+                <p>نمایی کلی از آمار درخواست‌ها و روند فعالیت اعضا.</p>
+              </div>
+              <button type="button" id="analytics-refresh" class="pill-button">
+                به‌روزرسانی گزارش
+              </button>
+            </div>
+            <p id="analytics-status" class="status-text">
+              برای دریافت گزارش روی «به‌روزرسانی» کلیک کنید.
+            </p>
+            <div id="analytics-content" class="data-card" aria-live="polite"></div>
+          </section>
+
+          <section id="route-admin" class="route" tabindex="-1" hidden>
+            <div id="admin-gate" class="auth-card" aria-live="polite">
+              <h3>ورود به پنل ادمین</h3>
+              <p>برای دسترسی به ابزار مدیریت ادمین، شناسه خود را وارد کنید.</p>
+              <form id="admin-auth-form" class="stacked-form">
+                <label for="admin-auth-user-id">شناسه کاربری</label>
+                <input
+                  id="admin-auth-user-id"
+                  name="user_id"
+                  type="number"
+                  inputmode="numeric"
+                  required
+                  placeholder="مثال: 123456789"
+                />
+                <button type="submit" class="primary-button">بررسی دسترسی</button>
+              </form>
+              <p id="admin-auth-status" class="status-text">
+                تنها ادمین‌های ثبت شده قادر به مشاهده این بخش هستند.
+              </p>
+            </div>
+
+            <div id="admin-panel" class="admin-panel" hidden>
+              <div class="section-heading">
+                <div>
+                  <h3>ابزار مدیریت ادمین‌ها</h3>
+                  <p id="admin-session-label">دسترسی فعال</p>
+                </div>
+                <button type="button" id="admin-signout" class="pill-button warning">خروج</button>
+              </div>
+              <div class="grid responsive-grid">
+                <form id="admin-add-form" class="data-card stacked-form">
+                  <h4>افزودن ادمین جدید</h4>
+                  <label for="admin-add-user-id">شناسه کاربری (User ID)</label>
+                  <input
+                    id="admin-add-user-id"
+                    name="user_id"
+                    type="number"
+                    inputmode="numeric"
+                    required
+                    placeholder="مثال: 123456789"
+                  />
+                  <label for="admin-add-username">نام کاربری تلگرام (اختیاری)</label>
+                  <input
+                    id="admin-add-username"
+                    name="username"
+                    type="text"
+                    inputmode="text"
+                    placeholder="مثال: @flyzex"
+                  />
+                  <label for="admin-add-full-name">نام نمایشی (اختیاری)</label>
+                  <input
+                    id="admin-add-full-name"
+                    name="full_name"
+                    type="text"
+                    inputmode="text"
+                    placeholder="مثال: تیم مدیریت"
+                  />
+                  <button type="submit" class="primary-button">افزودن</button>
+                  <p id="admin-add-status" class="status-text">
+                    برای افزودن ادمین شناسه کاربری را وارد کنید.
+                  </p>
+                </form>
+
+                <form id="admin-remove-form" class="data-card stacked-form">
+                  <h4>حذف ادمین موجود</h4>
+                  <label for="admin-remove-user-id">شناسه کاربری (User ID)</label>
+                  <input
+                    id="admin-remove-user-id"
+                    name="user_id"
+                    type="number"
+                    inputmode="numeric"
+                    required
+                    placeholder="مثال: 123456789"
+                  />
+                  <button type="submit" class="primary-button danger">حذف</button>
+                  <p id="admin-remove-status" class="status-text">
+                    شناسه ادمین مورد نظر را برای حذف وارد کنید.
+                  </p>
+                </form>
+              </div>
+
+              <article class="data-card">
+                <header class="card-header">
+                  <h4>فهرست ادمین‌های فعال</h4>
+                  <button type="button" id="admins-refresh" class="icon-button" aria-label="به‌روزرسانی فهرست ادمین‌ها">
+                    ⟳
+                  </button>
+                </header>
+                <p id="admins-status" class="status-text">
+                  فهرست ادمین‌های ثبت شده در این بخش نمایش داده می‌شود.
+                </p>
+                <ul id="admins-list" class="item-list" aria-live="polite"></ul>
+              </article>
+            </div>
+          </section>
+        </main>
       </div>
-    </section>
+    </div>
     <script src="static/app.js" type="module"></script>
   </body>
 </html>

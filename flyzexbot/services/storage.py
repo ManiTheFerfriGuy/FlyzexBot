@@ -310,6 +310,25 @@ class Storage:
             )
         return details
 
+    def get_admin_profile(self, user_id: int) -> Optional[Dict[str, Optional[str]]]:
+        if user_id not in self._state.admins:
+            return None
+
+        profile = dict(self._state.admin_profiles.get(user_id, {}))
+        username = profile.get("username")
+        full_name = profile.get("full_name")
+
+        application = self._state.applications.get(user_id)
+        if application:
+            username = username or application.username
+            full_name = full_name or application.full_name
+
+        return {
+            "user_id": user_id,
+            "username": username,
+            "full_name": full_name,
+        }
+
     def _normalise_language_key(self, language_code: Optional[str]) -> str:
         if language_code is None:
             return self._DEFAULT_LANGUAGE_KEY
