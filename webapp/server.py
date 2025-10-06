@@ -104,6 +104,14 @@ async def list_admins(storage: Storage = Depends(get_storage)) -> Dict[str, Any]
     return {"total": len(admins), "admins": admins}
 
 
+@app.get("/api/admins/{user_id}")
+async def get_admin(user_id: int, storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
+    admin = storage.get_admin_profile(user_id)
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="دسترسی ادمین یافت نشد.")
+    return {"admin": admin}
+
+
 @app.post("/api/admins")
 async def create_admin(payload: AdminPayload, storage: Storage = Depends(get_storage)) -> Dict[str, Any]:
     existing = storage.is_admin(payload.user_id)
